@@ -2,7 +2,13 @@
 Nysa FIFO Control
 """
 
-from pyftdi.pyftdi.ftdi import Ftdi
+import sys
+import os
+
+#from pyftdi.pyftdi.ftdi import Ftdi
+sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir))
+from ftdi.ftdi import Ftdi
+
 from array import array as Array
 
 class FifoController(object):

@@ -50,7 +50,8 @@ import string
 import time
 import argparse
 from array import array as Array
-from pyftdi.pyftdi.ftdi import Ftdi
+#from pyftdi.pyftdi.ftdi import Ftdi
+from ftdi.ftdi import Ftdi
 from fifo.fifo import FifoController
 from spi_flash import serial_flash_manager
 from bitbang.bitbang import BitBangController
@@ -96,6 +97,8 @@ class DionysusController():
         self.vendor = vendor_id
         self.product = product_id
         self.debug = debug
+        Ftdi.add_type(vendor_id, product_id, 0x700, "ft2232h")
+
         self.fifo = FifoController(vendor_id, product_id)
 
     def write_bin_file(self, filename):

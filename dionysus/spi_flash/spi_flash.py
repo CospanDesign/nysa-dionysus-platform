@@ -1,9 +1,13 @@
-from pyftdi.pyftdi import spi
 from array import array as Array
 import serialflash
 import time
 import json
 from serialflash import SerialFlash #SerialFlash base class
+
+#from pyftdi.pyftdi.ftdi import Ftdi
+
+sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir))
+from ftdi.ftdi import Ftdi
 
 class SPIProm(SerialFlash):
     JEDEC_ID            = 0x20

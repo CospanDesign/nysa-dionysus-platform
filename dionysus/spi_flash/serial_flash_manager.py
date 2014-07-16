@@ -28,12 +28,12 @@ import sys
 import json
 from array import array as Array
 
-from pyftdi.pyftdi.spi import SpiController
+#from pyftdi.pyftdi.spi import SpiController
+sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir))
+from ftdi.spi import SpiController
 
 #Get all types of the SPI Flash
 import numonyx_flash
-
-
 
 CMD_JEDEC_ID = 0x9F
 
