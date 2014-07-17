@@ -1,17 +1,12 @@
+
 import os
 import sys
-
 import time
 from array import array as Array
 from serial_flash import SerialFlash
-
-#from pyftdi.pyftdi.spi import SpiController
-
-sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir))
-from ftdi.ftdi import Ftdi
-from ftdi.spi import SpiController
-
-
+from pyftdi.pyftdi.spi import SpiController
+#sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
+#from dionysus.pyftdi.pyftdi.ftdi import Ftdi
 
 class NumonyxFlashDevice(SerialFlash):
     """ Numonyx Flash Device Implementation

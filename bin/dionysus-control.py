@@ -50,15 +50,16 @@ import string
 import time
 import argparse
 from array import array as Array
-#from pyftdi.pyftdi.ftdi import Ftdi
-from ftdi.ftdi import Ftdi
-from fifo.fifo import FifoController
-from spi_flash import serial_flash_manager
-from bitbang.bitbang import BitBangController
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "spi_flash"))
-sys.path.append(os.path.join(os.path.dirname(__file__), "bitbang"))
-sys.path.append(os.path.join(os.path.dirname(__file__), "fifo"))
+from pyftdi.pyftdi.ftdi import Ftdi
+sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir))
+#from dionysus.pyftdi.pyftdi.ftdi import Ftdi
+
+
+from dionysus.fifo.fifo import FifoController
+from dionysus.spi_flash import serial_flash_manager
+from dionysus.bitbang.bitbang import BitBangController
+
 
 DESCRIPTION= "\n" \
 " \n"
@@ -90,6 +91,25 @@ EPILOG = "\n" \
 "Author: Dave McCoy (dave.mccoy@cospandesign.com)\n"\
 "\n"\
 
+def monkey_type(self):
+    '''
+    types = { (0x0403, 0x6001, 0x200) : 'ft232am',
+              (0x0403, 0x6001, 0x400) : 'ft232bm',
+              (0x0403, 0x6001, 0x600) : 'ft232r',
+              (0x0403, 0x6014, 0x900) : 'ft232h',
+              (0x0403, 0x6010, 0x500) : 'ft2232d',
+              (0x0403, 0x6010, 0x600) : 'ft232c',
+              (0x0403, 0x6010, 0x700) : 'ft2232h',
+              (0x0403, 0x8530, 0x700) : 'ft2232h',
+              (0x0403, 0x6011, 0x800) : 'ft4232h' }
+    vendorId = self.usb_dev.idVendor
+    productId = self.usb_dev.idProduct
+    bcdDevice = self.usb_dev.bcdDevice
+    return types[ (vendorId, productId, bcdDevice) ]
+    '''
+    return 'ft2232h'
+
+
 
 class DionysusController():
 
@@ -97,8 +117,8 @@ class DionysusController():
         self.vendor = vendor_id
         self.product = product_id
         self.debug = debug
-        Ftdi.add_type(vendor_id, product_id, 0x700, "ft2232h")
-
+        Ftdi.type = monkey_type
+        Ftdi.frequency_max = 30.0E6
         self.fifo = FifoController(vendor_id, product_id)
 
     def write_bin_file(self, filename):
@@ -279,7 +299,7 @@ class DionysusController():
         self.dev = Ftdi()
         frequency = 30.0E6
         latency  = 4
-        Ftdi.add_type(self.vendor, self.product, 0x700, "ft2232h")
+        #Ftdi.add_type(self.vendor, self.product, 0x700, "ft2232h")
         self.dev.open(self.vendor, self.product, 0)
 
         #Drain the input buffer

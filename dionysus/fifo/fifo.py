@@ -1,15 +1,14 @@
 """
 Nysa FIFO Control
 """
-
 import sys
 import os
 
-#from pyftdi.pyftdi.ftdi import Ftdi
-sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir))
-from ftdi.ftdi import Ftdi
-
+from pyftdi.pyftdi.ftdi import Ftdi
+#sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
+#from dionysus.pyftdi.pyftdi.ftdi import Ftdi
 from array import array as Array
+
 
 class FifoController(object):
     SYNC_FIFO_INTERFACE = 1
@@ -18,12 +17,14 @@ class FifoController(object):
     def __init__(self, vendor, product):
         self.vendor = vendor
         self.product = product
+        Ftdi.type = 'ft2232h'
+        Ftdi.frequency_max = 30.0E6
         self.f = Ftdi()
 
 
     def set_sync_fifo(self, frequency = 30.0E6, latency = 2):
         """Configure the interface for synchronous FIFO mode"""
-        self.f.add_type(self.vendor, self.product, 0x700, "ft2232h")
+        #self.f.add_type(self.vendor, self.product, 0x700, "ft2232h")
         self.f.open(self.vendor, self.product, 0)
         #Drain the input buffer
         self.f.purge_buffers()
@@ -45,7 +46,7 @@ class FifoController(object):
     def set_async_fifo(self, frequency=6.0E6, latency = 2):
         """Configure the interface for asynchronous FIFO mode"""
         #Open FTDI Interface
-        self.f.add_type(self.vendor, self.product, 0x700, "ft2232h")
+        #self.f.add_type(self.vendor, self.product, 0x700, "ft2232h")
         self.f.open(self.vendor,
                     self.product, 
                     self.SYNC_FIFO_INTERFACE, 

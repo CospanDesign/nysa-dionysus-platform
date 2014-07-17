@@ -18,11 +18,10 @@
 import os
 import sys
 from array import array as Array
+from pyftdi.pyftdi.ftdi import Ftdi
+#sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
+#from dionysus.pyftdi.pyftdi.ftdi import Ftdi
 
-#from pyftdi.pyftdi.ftdi import Ftdi
-
-sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir))
-from ftdi.ftdi import Ftdi
 
 __author__ = 'dave.mccoy@cospandesign.com (Dave McCoy)'
 
@@ -34,6 +33,8 @@ class BitBangController(object):
         self.vendor = vendor_id
         self.product = product_id
         self.interface = interface
+        Ftdi.type = 'ft2232h'
+        Ftdi.frequency_max = 30.0E6
         self.f = Ftdi()
         self.debug = True
         self.f.open_bitbang(vendor_id, product_id, interface)
