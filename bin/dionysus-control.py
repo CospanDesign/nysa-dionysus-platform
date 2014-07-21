@@ -91,25 +91,6 @@ EPILOG = "\n" \
 "Author: Dave McCoy (dave.mccoy@cospandesign.com)\n"\
 "\n"\
 
-def monkey_type(self):
-    '''
-    types = { (0x0403, 0x6001, 0x200) : 'ft232am',
-              (0x0403, 0x6001, 0x400) : 'ft232bm',
-              (0x0403, 0x6001, 0x600) : 'ft232r',
-              (0x0403, 0x6014, 0x900) : 'ft232h',
-              (0x0403, 0x6010, 0x500) : 'ft2232d',
-              (0x0403, 0x6010, 0x600) : 'ft232c',
-              (0x0403, 0x6010, 0x700) : 'ft2232h',
-              (0x0403, 0x8530, 0x700) : 'ft2232h',
-              (0x0403, 0x6011, 0x800) : 'ft4232h' }
-    vendorId = self.usb_dev.idVendor
-    productId = self.usb_dev.idProduct
-    bcdDevice = self.usb_dev.bcdDevice
-    return types[ (vendorId, productId, bcdDevice) ]
-    '''
-    return 'ft2232h'
-
-
 
 class DionysusController():
 
@@ -117,8 +98,6 @@ class DionysusController():
         self.vendor = vendor_id
         self.product = product_id
         self.debug = debug
-        Ftdi.type = monkey_type
-        Ftdi.frequency_max = 30.0E6
         self.fifo = FifoController(vendor_id, product_id)
 
     def write_bin_file(self, filename):

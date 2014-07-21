@@ -33,8 +33,6 @@ class BitBangController(object):
         self.vendor = vendor_id
         self.product = product_id
         self.interface = interface
-        Ftdi.type = 'ft2232h'
-        Ftdi.frequency_max = 30.0E6
         self.f = Ftdi()
         self.debug = True
         self.f.open_bitbang(vendor_id, product_id, interface)
