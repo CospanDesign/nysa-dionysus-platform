@@ -114,7 +114,7 @@ class DionysusController():
 
         Raises:
             IOError:
-                Failed to open binary file      
+                Failed to open binary file
         """
         binf = ""
 
@@ -392,16 +392,16 @@ def main(argv):
                         action='store_true',
                         help="Send a ping command to Dionysus and wait for a response")
     #parser.add_argument("-z", "--read_back",
-    #                    type = str, 
+    #                    type = str,
     #                    nargs=1,
     #                    default="0x0403:0x8530",
     #                    help="Readback the .bin image to the filename given")
     parser.add_argument("bin",
-                        type = str, 
-                        nargs='?', 
-                        default="nothing", 
+                        type = str,
+                        nargs='?',
+                        default="nothing",
                         help = "Binary file to load into the SPI Prom")
-   
+
     #Parse out the arguments
     args = parser.parse_args()
 
@@ -454,7 +454,7 @@ def main(argv):
     #    sys.exit()
 
     #Go into configuration mode to program the FPGA
-    dc.set_debug_mode() 
+    dc.set_debug_mode()
     print "Uploading FPGA Binary File"
     if args.bin[0] == "nothing":
         print "No binary file to upload"
