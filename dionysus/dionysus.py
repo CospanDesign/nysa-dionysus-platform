@@ -43,12 +43,12 @@ p = os.path.join(os.path.dirname(__file__), os.pardir)
 sys.path.append(os.path.join(os.path.dirname(__file__),
                              os.pardir))
 
-from nysa.host.userland.python.nysa import Nysa
-from nysa.host.userland.python.nysa import NysaCommError
+from nysa.host.nysa import Nysa
+from nysa.host.nysa import NysaCommError
 
 #from pyftdi.pyftdi.ftdi import Ftdi
 
-from ftdi.ftdi import Ftdi
+from pyftdi.pyftdi.ftdi import Ftdi
 from array import array as Array
 
 from bitbang.bitbang import BitBangController

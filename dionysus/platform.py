@@ -27,7 +27,7 @@ __author__ = 'dave.mccoy@cospandesign.com (Dave McCoy)'
 import sys
 import os
 
-from nplatform import Platform
+from nysa.host.platform import Platform
 import usb.core
 import usb.util
 from pyftdi.pyftdi.ftdi import Ftdi
@@ -38,9 +38,10 @@ sys.path.append(os.path.join(os.path.dirname(__file__),
 
 
 import nysa
-from dionysus.dionysus import Dionysus
+from dionysus import Dionysus
 
 class DionysusPlatform(Platform):
+
     def __init__(self, status = None):
         super (DionysusPlatform, self).__init__(status)
         self.vendor = 0x0403
