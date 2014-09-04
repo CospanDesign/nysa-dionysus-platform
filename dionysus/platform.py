@@ -61,6 +61,6 @@ class DionysusPlatform(Platform):
                 self.add_device_dict(device.serial_number, Dionysus(idVendor = self.vendor, 
                                                       idProduct = self.product,
                                                       sernum = device.serial_number,
-                                                      debug = False))
+                                                      status = self.status))
         return self.dev_dict
 

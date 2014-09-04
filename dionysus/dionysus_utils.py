@@ -10,15 +10,15 @@ from pyftdi.pyftdi.ftdi import Ftdi
 
 from fifo.fifo import FifoController
 from spi_flash import serial_flash_manager
-from bitbang.bitbant import BitBangController
+from bitbang.bitbang import BitBangController
 
 from nysa.host.nysa import NysaError
 
 
-def upload(vendor, product, serial_number, filepath, status = None):
+def upload(vendor, product, serial_number, filepath, status):
         """
         Read a binary file found at filepath and write the binary image into the Flash
- 
+
         Args:
             vendor (int): Vendor ID of the USB Device
             product (int): Product ID of the USB Device
@@ -26,43 +26,63 @@ def upload(vendor, product, serial_number, filepath, status = None):
             filepath (string): Path to the binary file to upload
             status (Status Object): Status object, could be left blank if status is
                 not needed
- 
+
         Return:
             Nothing
- 
+
         Raises:
             USBError
         """
+        s = status
         binf = ""
- 
+
         f = open(filepath, "r")
         binf = f.read()
         f.close()
- 
-        if status is not None: status.Debug("Found file at: %s, read binary file" % filepath)
- 
-        if status is not None: status.Info("Found: %s" % str(flash))
 
+        if s: s.Debug("Found file at: %s, read binary file" % filepath)
+
+        set_debug_mode(vendor, product, serial_number)
+        manager = serial_flash_manager.SerialFlashManager(vendor, product, 2)
+        flash = manager.get_flash_device()
+
+        if s: s.Info("Found: %s" % str(flash))
+        if s: s.Info("Erasing the SPI flash device, this can take a minute or two...")
+        flash.bulk_erase()
+        if s: s.Info("Flash erased, writing binary image to PROM")
+        flash.write(0x00, binf)
+        if s: s.Info("Reading back the binary flash")
+        binf_rb = flash.read(0x00, len(binf))
+        if s: s.Info("Verifying the data read back is correct")
+        binf_str = binf_rb.tostring()
+        del flash
+        del manager
+
+        if binf_str != binf:
+            if s: s.Error("Data read back is not the same!")
+
+        if s: s.Info("Verification passed!")
+        set_sync_fifo_mode(vendor, product, serial_number)
 
 def program(vendor, product, serial_number, status = None):
         """
         Send a program signal to the Dionysus
- 
+
         Args:
             vendor (int): Vendor ID of the USB Device
             product (int): Product ID of the USB Device
             serial_number (int): Serial Number of the device
             status (Status Object): Status object, could be left blank if status is
                 not needed
- 
+
         Return:
             Nothing
-            
+
         Raises:
             USBError
- 
+
         """
-        bbc = BitBangController(self.vendor, self.product, 2)
+        bbc = BitBangController(vendor, product, 2)
         bbc.set_pins_to_input()
         if status: status.Debug("Set signals to output")
         bbc.set_pins_to_output()
@@ -85,6 +105,41 @@ def reset(ftdi, status = None):
 
 def list_ioctl(status = None):
         pass
+
+
+def set_sync_fifo_mode(vendor, product, serial_numbe):
+    """
+    Change the mode of the FIFO to a synchronous FIFO
+
+    Args:
+        Nothing
+
+    Returns:
+        Nothing
+
+    Raises:
+        Nothing
+
+    """
+    fifo = FifoController(vendor, product)
+    fifo.set_sync_fifo()
+
+def set_debug_mode(vendor, product, serial_number):
+    """
+    Change the mode of the FIFO to a asynchronous FIFO
+
+    Args:
+        Nothing
+
+    Returns:
+        Nothing
+
+    Raises:
+        Nothing
+    """
+    fifo = FifoController(vendor, product)
+    fifo.set_async_fifo()
+
 
 
 class Controller(object):
