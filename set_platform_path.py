@@ -7,10 +7,11 @@ import json
 import datetime
 
 PATH_NAME = "paths.json"
+BOARD_NAME = "dionysus"
 SITE_NYSA = os.path.join(site.getuserbase(), "nysa")
 SITE_PATH = os.path.join(SITE_NYSA, PATH_NAME)
 PLATFORM_PATH = os.path.abspath(os.path.dirname(__file__))
-CONFIG_PATH = os.path.join(PLATFORM_PATH, "board", "config.json")
+CONFIG_PATH = os.path.join(PLATFORM_PATH, BOARD_NAME, "board", "config.json")
 
 if __name__ == "__main__":
     f = open(CONFIG_PATH, "r")
@@ -40,6 +41,6 @@ if __name__ == "__main__":
     path_dict["boards"][name]["timestamp"] =timestamp
 
     f = open(SITE_PATH, "w")
-    f.write(json.dumps(path_dict))
+    f.write(json.dumps(path_dict, sort_keys = True, indent = 2, separators=(",", ": ")))
     f.close()
 

@@ -1,0 +1,10 @@
+
+name: nysa-dionysus-platform
+Version: 0.5.0
+Summary: Dionysus board support for interfacing with Nysa toolchain
+Home-page: https://dionysus.cospandesign.com
+Author: Cospan Design
+Author-email: dave.mccoy@cospandesign.com
+License: LICENSE.txt
+
+

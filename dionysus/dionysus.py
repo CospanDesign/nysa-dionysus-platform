@@ -67,11 +67,11 @@ class ReaderThread(threading.Thread):
     def __init__(self, dev, interrupt_update_callback, lock, status):
         super(ReaderThread, self).__init__()
         self.dev = dev
+        self.s = status
 
         self.interrupt_update_callback = interrupt_update_callback
         self.lock = lock
         self.term_flag = False
-        self.s = status
         self.interrupts_cb = []
         for i in range(INTERRUPT_COUNT):
             self.interrupts_cb.append([])
@@ -184,7 +184,6 @@ class Dionysus (Nysa):
         self.dev = Ftdi()
         self._open_dev()
         self.name = "Dionysus"
-        self.s = status
         try:
             #XXX: Hack to fix a strange bug where FTDI
             #XXX: won't recognize Dionysus until a read and reset occurs

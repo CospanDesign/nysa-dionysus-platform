@@ -1,0 +1,5 @@
+include *.md
+include *.txt
+recursive-include dionysus *.json
+recursive-include dionysus *.ucf
+recursive-include dionysus *.png
