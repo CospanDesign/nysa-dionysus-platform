@@ -38,6 +38,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__),
 
 
 import nysa
+from nysa.ibuilder.lib.xilinx_utils import find_xilinx_path
 from dionysus import Dionysus
 
 class DionysusPlatform(Platform):
@@ -63,4 +64,9 @@ class DionysusPlatform(Platform):
                                                       sernum = device.serial_number,
                                                       status = self.status))
         return self.dev_dict
+
+    def test_build_tools(self):
+        if find_xilinx_path() is None:
+            return False
+        return True
 
