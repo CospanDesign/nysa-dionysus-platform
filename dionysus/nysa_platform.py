@@ -27,7 +27,7 @@ __author__ = 'dave.mccoy@cospandesign.com (Dave McCoy)'
 import sys
 import os
 
-from nysa.host.platform import Platform
+from nysa.host.nysa_platform import Platform
 import usb.core
 import usb.util
 from pyftdi.pyftdi.ftdi import Ftdi
