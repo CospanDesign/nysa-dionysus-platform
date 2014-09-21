@@ -62,6 +62,8 @@ INTERRUPT_COUNT = 32
 INTERRUPT_SLEEP = 0.050
 #INTERRUPT_SLEEP = 1
 
+DIONYSUS_LOCK = threading.Lock()
+
 class ReaderThread(threading.Thread):
 
     def __init__(self, dev, interrupt_update_callback, lock, status):
@@ -70,27 +72,29 @@ class ReaderThread(threading.Thread):
         self.s = status
 
         self.interrupt_update_callback = interrupt_update_callback
-        self.lock = lock
+        #self.lock = lock
+        self.lock = DIONYSUS_LOCK
         self.term_flag = False
         self.interrupts_cb = []
         for i in range(INTERRUPT_COUNT):
             self.interrupts_cb.append([])
 
     def stop(self):
-        if self.s: self.s.Debug( "Finish!")
+        #if self.s: self.s.Debug( "Finish!")
         self.term_flag = True
 
     def update_interrupts(self, interrupts):
-        self.s.Debug( "Updating interrupt...")
+        #self.s.Debug( "Updating interrupt...")
+        pass
 
     def register_interrupt_cb(self, index, callback):
-        if self.s: self.s.Debug( "Registering Callback for device: %d" % index)
+        #if self.s: self.s.Debug( "Registering Callback for device: %d" % index)
         if index > INTERRUPT_COUNT - 1:
             raise NysaCommError("Index of interrupt device is out of range (> %d)" % (INTERRUPT_COUNT - 1))
         self.interrupts_cb[index].append(callback)
 
     def unregister_interrupt_cb(self, index, callback = None):
-        if self.s: self.s.Debug( "Unregister Callback for device: %d" % index)
+        #if self.s: self.s.Debug( "Unregister Callback for device: %d" % index)
         if index > INTERRUPT_COUNT -1:
             raise NysaCommError("Index of interrupt device is out of range (> %d)" % (INTERRUPT_COUNT - 1))
         interrupt_list = self.interrupts_cb[index]
@@ -101,22 +105,24 @@ class ReaderThread(threading.Thread):
             interrupt_list.remove(callback)
 
     def run(self):
-        if self.s: self.s.Debug( "Reader thread started")
+        #if self.s: self.s.Debug( "Reader thread started")
         while not self.term_flag:
             data = ""
             try:
-                if self.lock.acquire(False):
+                if self.lock.acquire():
                     try:
                         data = self.dev.read_data_bytes(13)
                         
                         if len(data) > 0 and 220 in data:
+                            #print "interrupt"
                             offset = data.index(220)
                             if offset > 0:
                                 data = data[offset:]
                                 data += self.dev.read_data_bytes(offset)
                 
                             if len(data) > 2:
-                                if self.s: self.s.Debug( "Data: %s" % str(data))
+                                #if self.s: self.s.Debug( "Data: %s" % str(data))
+                                pass
 
                             if data[0] == 50 and data[1] == 96:
                                 data = self.dev.read_data_bytes(2)
@@ -129,17 +135,18 @@ class ReaderThread(threading.Thread):
                                               data[11] << 8  |
                                               data[12])
                         
-                                if self.s: self.s.Debug( "Got Interrupts: 0x%08X" % interrupts)
+                                #if self.s: self.s.Debug( "Got Interrupts: 0x%08X" % interrupts)
                                 self.process_interrupts(interrupts)
                                 self.interrupt_update_callback(interrupts)
+                                #print "Interrupt finished"
                     except:
-                        if self.s: self.s.Debug( "Exception when reading interrupts!")
-                        pass
+                        print "Exception when reading interrupts: %s" % sys.exc_info()[0]
                 
                     finally:
                         self.lock.release()
                 else:
-                    if self.s: self.s.Debug( "Lock not aquired")
+                    #if self.s: self.s.Debug( "Lock not aquired")
+                    pass
             except:
                 pass
 
@@ -152,7 +159,7 @@ class ReaderThread(threading.Thread):
             if len(self.interrupts_cb[i]) == 0:
                 continue
             #Call all callbacks
-            if self.s: self.s.Debug( "Calling callback for: %d" % i)
+            #if self.s: self.s.Debug( "Calling callback for: %d" % i)
             for cb in self.interrupts_cb[i]:
                 try:
                     cb()
@@ -160,7 +167,7 @@ class ReaderThread(threading.Thread):
                     #If an error occured when calling a callback removed if from
                     #our list
                     self.interrupts_cb.remove(cb)
-                    self.s.Debug( "Error need to remove callback")
+                    #self.s.Debug( "Error need to remove callback")
 
 
 class Dionysus (Nysa):
@@ -178,7 +185,8 @@ class Dionysus (Nysa):
 
         self.s = status
         self.dev = None
-        self.lock = threading.Lock()
+        #self.lock = threading.Lock()
+        self.lock = DIONYSUS_LOCK
         
 
         self.dev = Ftdi()
@@ -249,7 +257,7 @@ class Dionysus (Nysa):
 
         #Reset
         #Configure Clock
-        frequency = self.dev._set_frequency(frequency)
+        #frequency = self.dev._set_frequency(frequency)
 
         #Set Latency Timer
         self.dev.set_latency_timer(latency)
@@ -332,6 +340,8 @@ class Dionysus (Nysa):
             
             timeout = time.time() + self.timeout
             rsp = Array ('B')
+            #print "start a read"
+            #time.sleep(0.5)
             while time.time() < timeout:
                 rsp = self.dev.read_data_bytes(1)
                 if len(rsp) > 0 and rsp[0] == 0xDC:
@@ -349,6 +359,7 @@ class Dionysus (Nysa):
                     self.s.Debug( "Timed out while waiting for response")
                 raise NysaCommError("Timeout while waiting for a response")
             
+            #print "finished"
             #Watch out for the modem status bytes
             read_count = 0
             response = Array ('B')
