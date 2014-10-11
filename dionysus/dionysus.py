@@ -111,11 +111,14 @@ class ReaderThread(threading.Thread):
             try:
                 if self.lock.acquire():
                     try:
-                        data = self.dev.read_data_bytes(13)
+                        data = self.dev.read_data_bytes(1)
                         
-                        if len(data) > 0 and 220 in data:
+                        if len(data) > 0 and data[0] == 0xDC:
+                            data += self.dev.read_data_bytes(12)
+                            
+                            print "data: %s" % str(data)
                             #print "interrupt"
-                            offset = data.index(220)
+                            offset = data.index(0xDC)
                             if offset > 0:
                                 data = data[offset:]
                                 data += self.dev.read_data_bytes(offset)
