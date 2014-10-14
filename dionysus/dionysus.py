@@ -121,29 +121,35 @@ class WorkerThread(threading.Thread):
         rdata = None
         while (1):
             try:
-                wdata = self.hwq.get(block = True, timeout = INTERRUPT_SLEEP)
-            except Queue.Empty:
-                #Timeout has occured, read and process interrupts
-                self.check_interrupt()
-                continue
-
-            #Check for finish condition
-            if wdata is None:
-                #if write data is None then we are done
-                return
-
-            if wdata == DIONYSUS_RESET:
-                self.reset()
-            elif wdata == DIONYSUS_PING:
-                self.ping()
-            elif wdata == DIONYSUS_WRITE:
-                self.write()
-            elif wdata == DIONYSUS_READ:
-                self.read()
-            elif wdata == DIONYSUS_DUMP_CORE:
-                self.dump_core()
-            else:
-                print "Unrecognized command from write queue: %d" % wdata
+                try:
+                    wdata = self.hwq.get(block = True, timeout = INTERRUPT_SLEEP)
+                except Queue.Empty:
+                    #Timeout has occured, read and process interrupts
+                    self.check_interrupt()
+                    continue
+            
+                #Check for finish condition
+                if wdata is None:
+                    #if write data is None then we are done
+                    return
+             
+                if wdata == DIONYSUS_RESET:
+                    self.reset()
+                elif wdata == DIONYSUS_PING:
+                    self.ping()
+                elif wdata == DIONYSUS_WRITE:
+                    self.write()
+                elif wdata == DIONYSUS_READ:
+                    self.read()
+                elif wdata == DIONYSUS_DUMP_CORE:
+                    self.dump_core()
+                else:
+                    print "Unrecognized command from write queue: %d" % wdata
+            except AttributeError:
+                    #If the queue is none then it was destroyed by the main thread
+                    #we are done then
+                    return
+          
 
     def reset(self):
         vendor = self.d.data[0]
