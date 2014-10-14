@@ -371,7 +371,7 @@ class WorkerThread(threading.Thread):
             self.s.Debug( "Data: %s" % str(rsp))
 
         core_data = Array('L')
-        for i in rage(0, count, 4):
+        for i in range(0, count, 4):
             if self.s:
                 self.s.Debug( "Count: %d" % i)
                 core_data.append(rsp[i] << 24 | rsp[i + 1] << 16 | rsp[i + 2] << 8 | rsp[i + 3])
@@ -489,7 +489,7 @@ class _Dionysus (Nysa):
         self.dev = None
         #Run a full garbage collection so any previous references to Dionysus will be removed
         gc.collect()
-        #self.lock = threading.Lock()
+        self.lock = threading.Lock()
 
 
         self.dev = Ftdi()
@@ -627,38 +627,39 @@ class _Dionysus (Nysa):
             NysaCommError
         """
         #self.s = True
-        if self.s: self.s.Debug( "Reading...")
-
-        #Set up the ID and the 'Read command (0x02)'
-        self.d.data = Array('B', [0xCD, 0x02])
-        if memory_device:
+        with self.lock:
+            if self.s: self.s.Debug( "Reading...")
+            
+            #Set up the ID and the 'Read command (0x02)'
+            self.d.data = Array('B', [0xCD, 0x02])
+            if memory_device:
+                if self.s:
+                    self.s.Debug( "Read from Memory Device")
+                #'OR' the 0x10 flag to indicate that we are using the memory bus
+                self.d.data = Array('B', [0xCD, 0x12])
+            
+            #Add the length value to the array
+            fmt_string = "%06X" % length
+            self.d.data.fromstring(fmt_string.decode('hex'))
+            
+            #Add the device Number
+            
+            #XXX: Memory devices don't have an offset (should they?)
+            offset_string = "00"
+            if not memory_device:
+                offset_string = "%02X" % device_id
+            
+            self.d.data.fromstring(offset_string.decode('hex'))
+            
+            #Add the address
+            addr_string = "%06X" % address
+            self.d.data.fromstring(addr_string.decode('hex'))
             if self.s:
-                self.s.Debug( "Read from Memory Device")
-            #'OR' the 0x10 flag to indicate that we are using the memory bus
-            self.d.data = Array('B', [0xCD, 0x12])
-
-        #Add the length value to the array
-        fmt_string = "%06X" % length
-        self.d.data.fromstring(fmt_string.decode('hex'))
-
-        #Add the device Number
-
-        #XXX: Memory devices don't have an offset (should they?)
-        offset_string = "00"
-        if not memory_device:
-            offset_string = "%02X" % device_id
-
-        self.d.data.fromstring(offset_string.decode('hex'))
-
-        #Add the address
-        addr_string = "%06X" % address
-        self.d.data.fromstring(addr_string.decode('hex'))
-        if self.s:
-            self.s.Debug( "DEBUG: Data read string: %s" % str(self.d.data))
-
-        self.d.length = length
-        self.hwq.put(DIONYSUS_READ)
-        return self.ipc_comm_response("read")
+                self.s.Debug( "DEBUG: Data read string: %s" % str(self.d.data))
+            
+            self.d.length = length
+            self.hwq.put(DIONYSUS_READ)
+            return self.ipc_comm_response("read")
 
 
     def write(self, device_id, address, data, memory_device=False):
@@ -690,33 +691,33 @@ class _Dionysus (Nysa):
         Raises:
             NysaCommError
         """
-
-        length = len(data) / 4
-        #Create an Array with the identification byte and code for writing
-        self.d.data = Array ('B', [0xCD, 0x01])
-        if memory_device:
+        with self.lock:
+            length = len(data) / 4
+            #Create an Array with the identification byte and code for writing
+            self.d.data = Array ('B', [0xCD, 0x01])
+            if memory_device:
+                if self.s:
+                    self.s.Debug( "Memory Device")
+                self.d.data = Array('B', [0xCD, 0x11])
+            
+            #Append the length into the first 24 bits
+            fmt_string = "%06X" % length
+            self.d.data.fromstring(fmt_string.decode('hex'))
+            offset_string = "00"
+            if not memory_device:
+                offset_string = "%02X" % device_id
+            self.d.data.fromstring(offset_string.decode('hex'))
+            addr_string = "%06X" % address
+            self.d.data.fromstring(addr_string.decode('hex'))
+            self.d.data.extend(data)
             if self.s:
-                self.s.Debug( "Memory Device")
-            self.d.data = Array('B', [0xCD, 0x11])
-
-        #Append the length into the first 24 bits
-        fmt_string = "%06X" % length
-        self.d.data.fromstring(fmt_string.decode('hex'))
-        offset_string = "00"
-        if not memory_device:
-            offset_string = "%02X" % device_id
-        self.d.data.fromstring(offset_string.decode('hex'))
-        addr_string = "%06X" % address
-        self.d.data.fromstring(addr_string.decode('hex'))
-        self.d.data.extend(data)
-        if self.s:
-            self.s.Debug( "Length: %d" % len(data))
-            self.s.Debug( "Reported Length: %d" % length)
-            self.s.Debug( "Writing: %s" % str(self.d.data[0:9]))
-            self.s.Debug( "\tData: %s" % str(self.d.data[9:13]))
-
-        self.hwq.put(DIONYSUS_WRITE)
-        self.ipc_comm_response("write")
+                self.s.Debug( "Length: %d" % len(data))
+                self.s.Debug( "Reported Length: %d" % length)
+                self.s.Debug( "Writing: %s" % str(self.d.data[0:9]))
+                self.s.Debug( "\tData: %s" % str(self.d.data[9:13]))
+            
+            self.hwq.put(DIONYSUS_WRITE)
+            self.ipc_comm_response("write")
 
     def ping (self):
         """ping
@@ -737,8 +738,9 @@ class _Dionysus (Nysa):
         Raises:
             NysaCommError
         """
-        self.hwq.put(DIONYSUS_PING)
-        self.ipc_comm_response("ping")
+        with self.lock:
+            self.hwq.put(DIONYSUS_PING)
+            self.ipc_comm_response("ping")
 
     def reset (self):
         """ reset
@@ -760,9 +762,10 @@ class _Dionysus (Nysa):
         Raises:
             NysaCommError: Failue in communication
         """
-        self.d.data = (self.vendor, self.product)
-        self.hwq.put(DIONYSUS_RESET)
-        self.ipc_comm_response("reset")
+        with self.lock:
+            self.d.data = (self.vendor, self.product)
+            self.hwq.put(DIONYSUS_RESET)
+            self.ipc_comm_response("reset")
 
     def dump_core(self):
         """ dump_core
@@ -786,8 +789,9 @@ class _Dionysus (Nysa):
         Raises:
             NysaCommError: A failure in communication is detected
         """
-        self.hwq.put(DIONYSUS_DUMP_CORE)
-        return self.ipc_comm_response("dump core")
+        with self.lock:
+            self.hwq.put(DIONYSUS_DUMP_CORE)
+            return self.ipc_comm_response("dump core")
 
     def register_interrupt_callback(self, index, callback):
         """ register_interrupt
@@ -824,7 +828,7 @@ class _Dionysus (Nysa):
         Raises:
             Nothing (This function fails quietly if ther callback is not found)
         """
-        self.worker.unregister_interrupt_callback(index, callback)
+        self.worker.unregister_interrupt_cb(index, callback)
         #self.reader_thread.unregister_interrupt_cb(index, callback)
 
     def wait_for_interrupts(self, wait_time = 1, dev_id = None):
