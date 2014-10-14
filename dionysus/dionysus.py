@@ -37,7 +37,6 @@ import os
 import Queue
 import threading
 import time
-import weakref
 import gc
 from array import array as Array
 
@@ -93,15 +92,18 @@ class WorkerThread(threading.Thread):
                     host_write_queue,
                     host_read_queue,
                     dionysus_data,
+                    lock,
                     interrupt_update_callback):
         super(WorkerThread, self).__init__()
         #self.name = "Worker"
         
-        self.dev_ref = weakref.ref(dev, self.last_ref)
+        self.dev = dev
         self.hwq = host_write_queue
         self.hrq = host_read_queue
         self.iuc = interrupt_update_callback
         self.d = dionysus_data
+        self.lock = lock
+        self.interrupts = 0
 
         self.interrupts_cb = []
         for i in range(INTERRUPT_COUNT):
@@ -114,6 +116,7 @@ class WorkerThread(threading.Thread):
     def run(self):
         self.s = status.Status()
         self.s.set_level(status.StatusLevel.VERBOSE)
+        #self.s.set_level(status.StatusLevel.FATAL)
         wdata = None
         rdata = None
         while (1):
@@ -157,8 +160,8 @@ class WorkerThread(threading.Thread):
         self.hrq.put(DIONYSUS_RESP_OK)
 
     def write(self):
-        self.dev_ref().purge_buffers()
-        self.dev_ref().write_data(self.d.data)
+        self.dev.purge_buffers()
+        self.dev.write_data(self.d.data)
 
         rsp = Array ('B')
         #self.s = True
@@ -166,14 +169,14 @@ class WorkerThread(threading.Thread):
             self.s.Debug( "Data Out: %s" % str(self.d.data))
 
         rsp = Array ('B')
-        rsp = self.dev_ref().read_data_bytes(1)
+        rsp = self.dev.read_data_bytes(1)
 
         if len(rsp) > 0 and rsp[0] == 0xDC:
             if self.s: self.s.Debug( "Got a Response")
         else:
             timeout = time.time() + DIONYSUS_WRITE_TIMEOUT
             while time.time() < timeout:
-                rsp = self.dev_ref().read_data_bytes(1)
+                rsp = self.dev.read_data_bytes(1)
                 if len(rsp) > 0 and rsp[0] == 0xDC:
                     if self.s: self.s.Debug( "Got a Response")
                     break
@@ -195,12 +198,12 @@ class WorkerThread(threading.Thread):
 
 
         read_count = 0
-        rsp = self.dev_ref().read_data_bytes(12)
+        rsp = self.dev.read_data_bytes(12)
         timeout = time.time() + DIONYSUS_WRITE_TIMEOUT
         read_count = len(rsp)
 
         while (time.time() < timeout) and (read_count < 12):
-            rsp += self.dev_ref().read_data_bytes(12 - read_count)
+            rsp += self.dev.read_data_bytes(12 - read_count)
             read_count = len(rsp)
 
         if self.s:
@@ -211,17 +214,17 @@ class WorkerThread(threading.Thread):
 
     def read(self):
         length = self.d.length
-        self.dev_ref().purge_buffers()
-        self.dev_ref().write_data(self.d.data)
+        self.dev.purge_buffers()
+        self.dev.write_data(self.d.data)
 
         rsp = Array ('B')
-        rsp = self.dev_ref().read_data_bytes(1)
+        rsp = self.dev.read_data_bytes(1)
         if len(rsp) > 0 and rsp[0] == 0xDC:
             if self.s: self.s.Debug( "Got a Response")
         else:
             timeout = time.time() + DIONYSUS_READ_TIMEOUT
             while time.time() < timeout:
-                rsp = self.dev_ref().read_data_bytes(1)
+                rsp = self.dev.read_data_bytes(1)
                 if len(rsp) > 0 and rsp[0] == 0xDC:
                     if self.s: self.s.Debug( "Got a Response")
                     break
@@ -248,11 +251,11 @@ class WorkerThread(threading.Thread):
         timeout = time.time() + DIONYSUS_READ_TIMEOUT
 
         total_length = length * 4 + 8
-        rsp += self.dev_ref().read_data_bytes(total_length - read_count)
+        rsp += self.dev.read_data_bytes(total_length - read_count)
         read_count = len(rsp)
         
         while (time.time() < timeout) and (read_count < total_length):
-            rsp += self.dev_ref().read_data_bytes(total_length - read_count)
+            rsp += self.dev.read_data_bytes(total_length - read_count)
             read_count = len(rsp)
 
         #self.s = True
@@ -277,7 +280,7 @@ class WorkerThread(threading.Thread):
             self.s.Debug( "Sending ping...",)
 
 
-        self.dev_ref().write_data(data)
+        self.dev.write_data(data)
 
         #Set up a response
         rsp = Array('B')
@@ -286,7 +289,7 @@ class WorkerThread(threading.Thread):
         timeout = time.time() + DIONYSUS_PING_TIMEOUT
 
         while time.time() < timeout:
-            rsp = self.dev_ref().read_data_bytes(5)
+            rsp = self.dev.read_data_bytes(5)
             temp.extend(rsp)
             if 0xDC in rsp:
                 if self.s:
@@ -306,7 +309,7 @@ class WorkerThread(threading.Thread):
         read_data.extend(rsp[index:])
 
         num = 3 - index
-        read_data.extend(self.dev_ref().read_data_bytes(num))
+        read_data.extend(self.dev.read_data_bytes(num))
 
         if self.s:
             self.s.Debug( "Success")
@@ -319,8 +322,8 @@ class WorkerThread(threading.Thread):
         if self.s:
             self.s.Debug( "Sending core dump request...")
 
-        self.dev_ref().purge_buffers()
-        self.dev_ref().write_data(data)
+        self.dev.purge_buffers()
+        self.dev.write_data(data)
 
         core_dump = Array('L')
         wait_time = 5
@@ -328,7 +331,7 @@ class WorkerThread(threading.Thread):
 
         temp = Array ('B')
         while time.time() < timeout:
-            rsp = self.dev_ref().read_data_bytes(1)
+            rsp = self.dev.read_data_bytes(1)
             temp.extend(rsp)
             if 0xDC in rsp:
                 self.s.Debug( "Read a response from the core dump")
@@ -347,7 +350,7 @@ class WorkerThread(threading.Thread):
         #Wishbone Master
         timeout = time.time() + wait_time
         while (time.time() < timeout) and (read_count < read_total):
-            rsp += self.dev_ref().read_data_bytes(read_total - read_count)
+            rsp += self.dev.read_data_bytes(read_total - read_count)
             read_count = len(rsp)
 
 
@@ -363,7 +366,7 @@ class WorkerThread(threading.Thread):
         temp = Array ('B')
         rsp = Array('B')
         while (time.time() < timeout) and (read_count < read_total):
-            rsp += self.dev_ref().read_data_bytes(read_total - read_count)
+            rsp += self.dev.read_data_bytes(read_total - read_count)
             read_count = len(rsp)
 
         if self.s:
@@ -386,43 +389,45 @@ class WorkerThread(threading.Thread):
     def check_interrupt(self):
         #XXX: Non blocking read from the device
         try:
-            data = self.dev_ref().read_data_bytes(2)
-            if len(data) == 0 or data[0] != 0xDC:
-                return
-            #print "data: %s" % str(data)
-
-            data += self.dev_ref().read_data_bytes(11)
-
+            self.interrupts = 0
+            #if self.lock.aquire(blocking = False):
+            with self.lock:
+                data = self.dev.read_data_bytes(2)
+                if len(data) == 0 or data[0] != 0xDC:
+                    return
+                data += self.dev.read_data_bytes(11)
+            
             self.s.Verbose("data: %s" % str(data))
             #print "interrupt"
             #offset = data.index(0xDC)
             #if offset > 0:
             #    data = data[offset:]
-            #    data += self.dev_ref().read_data_bytes(offset)
-
+            #    data += self.dev.read_data_bytes(offset)
+            
             '''
             if len(data) > 2:
                 #if self.s: self.s.Debug( "Data: %s" % str(data))
                 pass
             '''
-
+            
             '''
             if data[0] == 50 and data[1] == 96:
-                data += data[2:] + self.dev_ref().read_data_bytes(2)
-
+                data += data[2:] + self.dev.read_data_bytes(2)
+            
             '''
             if len(data) != 13:
                 print "data length is not 13!: %s" % str(data)
+            
+            self.interrupts =   (data[9]  << 24 |
+                                data[10] << 16 |
+                                data[11] << 8  |
+                                data[12])
 
-            interrupts = (data[9]  << 24 |
-                          data[10] << 16 |
-                          data[11] << 8  |
-                          data[12])
-
-            #if self.s: self.s.Debug( "Got Interrupts: 0x%08X" % interrupts)
-            self.process_interrupts(interrupts)
-            self.interrupt_update_callback(interrupts)
-            #print "Interrupt finished"
+            if self.interrupts > 0:
+                #if self.s: self.s.Debug( "Got Interrupts: 0x%08X" % interrupts)
+                self.process_interrupts(self.interrupts)
+                self.interrupt_update_callback(self.interrupts)
+                #print "Interrupt finished"
         except:
             pass
             #print "Exception when reading interrupts"
@@ -434,7 +439,7 @@ class WorkerThread(threading.Thread):
             if len(self.interrupts_cb[i]) == 0:
                 continue
             #Call all callbacks
-            #if self.s: self.s.Debug( "Calling callback for: %d" % i)
+            self.s.Debug( "Calling callback for: %d" % i)
             for cb in self.interrupts_cb[i]:
                 try:
                     cb()
@@ -507,7 +512,7 @@ class _Dionysus (Nysa):
 
         self.d = DionysusData()
 
-        self.worker = WorkerThread(self.dev, self.hwq, self.hrq, self.d, self.interrupt_update_callback)
+        self.worker = WorkerThread(self.dev, self.hwq, self.hrq, self.d, self.lock, self.interrupt_update_callback)
         #Is there a way to indicate closing
         self.worker.setDaemon(True)
         self.worker.start()
