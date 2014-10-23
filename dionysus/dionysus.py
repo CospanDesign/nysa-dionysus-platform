@@ -40,6 +40,8 @@ import time
 import gc
 from array import array as Array
 
+from threading import current_thread
+
 
 p = os.path.join(os.path.dirname(__file__), os.pardir)
 sys.path.append(os.path.join(os.path.dirname(__file__),
@@ -60,7 +62,7 @@ import dionysus_utils
 
 DIONYSUS_QUEUE_TIMEOUT = 7
 DIONYSUS_PING_TIMEOUT = 0.1
-DIONYSUS_WRITE_TIMEOUT = 3
+DIONYSUS_WRITE_TIMEOUT = 5
 DIONYSUS_READ_TIMEOUT = 3
 
 INTERRUPT_COUNT = 32
@@ -80,6 +82,15 @@ DIONYSUS_DUMP_CORE = 5
 
 DIONYSUS_RESP_OK = 0
 DIONYSUS_RESP_ERR = -1
+
+_dionysus_instances = {}
+
+def Dionysus(idVendor = 0x0403, idProduct = 0x8530, sernum = None, status = False):
+    global _dionysus_instances
+    if sernum in _dionysus_instances:
+        return _dionysus_instances[sernum]
+    _dionysus_instances[sernum] = _Dionysus(idVendor, idProduct, sernum, status)
+    return _dionysus_instances[sernum]
 
 class DionysusData(object):
     data = None
@@ -116,18 +127,20 @@ class WorkerThread(threading.Thread):
     def run(self):
         self.s = status.Status()
         self.s.set_level(status.StatusLevel.VERBOSE)
-        #self.s.set_level(status.StatusLevel.FATAL)
+        #self.s.set_level(status.StatusLevel.INFO)
         wdata = None
         rdata = None
         while (1):
             try:
                 try:
                     wdata = self.hwq.get(block = True, timeout = INTERRUPT_SLEEP)
+
                 except Queue.Empty:
                     #Timeout has occured, read and process interrupts
+                    #print ".",
                     self.check_interrupt()
                     continue
-            
+ 
                 #Check for finish condition
                 if wdata is None:
                     #if write data is None then we are done
@@ -145,11 +158,15 @@ class WorkerThread(threading.Thread):
                     self.dump_core()
                 else:
                     print "Unrecognized command from write queue: %d" % wdata
+
+
             except AttributeError:
-                    #If the queue is none then it was destroyed by the main thread
-                    #we are done then
-                    return
-          
+                print "closing dionysus worker thread"
+                #If the queue is none then it was destroyed by the main thread
+                #we are done then
+                return
+
+
 
     def reset(self):
         vendor = self.d.data[0]
@@ -174,35 +191,34 @@ class WorkerThread(threading.Thread):
         if self.s and (len(self.d.data) < 100):
             self.s.Debug( "Data Out: %s" % str(self.d.data))
 
-        rsp = Array ('B')
+        #rsp = Array ('B')
         rsp = self.dev.read_data_bytes(1)
 
         if len(rsp) > 0 and rsp[0] == 0xDC:
-            if self.s: self.s.Debug( "Got a Response")
+            self.s.Debug( "Got a Response")
         else:
             timeout = time.time() + DIONYSUS_WRITE_TIMEOUT
             while time.time() < timeout:
                 rsp = self.dev.read_data_bytes(1)
                 if len(rsp) > 0 and rsp[0] == 0xDC:
-                    if self.s: self.s.Debug( "Got a Response")
+                    self.s.Debug( "Got a Response")
                     break
 
         if len(rsp) > 0:
             if rsp[0] != 0xDC:
-                if self.s:
-                    self.s.Debug( "Reponse ID Not found")
+                self.s.Error( "Reponse ID Not found")
                 #raise NysaCommError("Did not find ID byte (0xDC) in response: %s" % str(rsp))
                 self.hrq.put(DIONYSUS_RESP_ERR)
                 return
 
         else:
-            if self.s:
-                self.s.Debug( "No Response")
+            self.s.Error("No Response")
             #raise NysaCommError ("Timeout while waiting for response")
             self.hrq.put(DIONYSUS_RESP_ERR)
             return
 
 
+        #Got ID byte now look for the rest of the data
         read_count = 0
         rsp = self.dev.read_data_bytes(12)
         timeout = time.time() + DIONYSUS_WRITE_TIMEOUT
@@ -212,21 +228,23 @@ class WorkerThread(threading.Thread):
             rsp += self.dev.read_data_bytes(12 - read_count)
             read_count = len(rsp)
 
-        if self.s:
-            self.s.Debug( "DEBUG: Write Response: %s" % str(rsp[0:8]))
-            #self.s.Debug( "Response: %s" % str(rsp))
+        self.s.Debug( "DEBUG: Write Response: %s" % str(rsp[0:8]))
+        #self.s.Debug( "Response: %s" % str(rsp))
 
         self.hrq.put(DIONYSUS_RESP_OK)
 
     def read(self):
         length = self.d.length
         self.dev.purge_buffers()
+        dout = self.d.data
+        self.s.Debug( "READ Request: Data Out: %s" % str(self.d.data))
+
         self.dev.write_data(self.d.data)
 
         rsp = Array ('B')
-        rsp = self.dev.read_data_bytes(1)
-        if len(rsp) > 0 and rsp[0] == 0xDC:
-            if self.s: self.s.Debug( "Got a Response")
+        rsp = self.dev.read_data_bytes(2)
+        if len(rsp) > 1 and rsp[0] == 0xDC and rsp[1] == 0xFD:
+            if self.s: self.s.Debug("Got a Response")
         else:
             timeout = time.time() + DIONYSUS_READ_TIMEOUT
             while time.time() < timeout:
@@ -238,22 +256,22 @@ class WorkerThread(threading.Thread):
         if len(rsp) > 0:
             if rsp[0] != 0xDC:
                 if self.s:
-                    self.s.Debug( "Response Not Found")
+                    self.s.Error("Response Not Found")
                 #raise NysaCommError("Did not find identification byte (0xDC): %s" % str(rsp))
                 self.hrq.put(DIONYSUS_RESP_ERR)
                 return
 
         else:
             if self.s:
-                self.s.Debug( "Timed out while waiting for response")
+                self.s.Error("Timed out while waiting for response")
             #raise NysaCommError("Timeout while waiting for a response")
             self.hrq.put(DIONYSUS_RESP_ERR)
             return
 
         #print "finished"
         #Watch out for the modem status bytes
-        read_count = 0
-        rsp = Array('B')
+        rsp = rsp[1:]
+        read_count = len(rsp)
         timeout = time.time() + DIONYSUS_READ_TIMEOUT
 
         total_length = length * 4 + 8
@@ -266,14 +284,19 @@ class WorkerThread(threading.Thread):
 
         #self.s = True
         if self.s:
-            self.s.Debug( "DEBUG READ:")
-            self.s.Debug( "\tRead Length: %d, Total Length: %d" % (len(rsp), total_length))
-            #self.s.Debug( "Time left on timeout: %d" % (timeout - time.time()))
+            self.s.Debug("DEBUG READ:")
+            if (time.time() > timeout):
+                self.d.Error("\tTimeout condition occured!")
+            self.s.Debug( "Time left on timeout: %d" % (timeout - time.time()))
 
             self.s.Debug( "\tResponse Length: %d" % len(rsp))
             self.s.Debug( "\tResponse Status: %s" % str(rsp[:8]))
             self.s.Debug( "\tResponse Dev ID: %d Addr: 0x%06X" % (rsp[4], (rsp[5] << 16 | rsp[6] << 8 | rsp[7])))
-            self.s.Debug( "\tResponse Data:\n\t%s" % str(rsp[8:]))
+            if len(rsp[8:]) > 32:
+                #self.s.Debug( "\tResponse Data:\n\t%s" % str(rsp[8:40]))
+                self.s.Debug( "\tResponse Data:\n\t%s" % str(rsp[:40]))
+            else:
+                self.s.Debug( "\tResponse Data:\n\t%s" % str(rsp))
         #self.s = False
         #self.s = False
         self.d.data = rsp[8:]
@@ -393,34 +416,21 @@ class WorkerThread(threading.Thread):
         self.hrq.put(DIONYSUS_RESP_OK)
 
     def check_interrupt(self):
-        #XXX: Non blocking read from the device
+        self.interrupts = 0
+        data = None
+        if not self.lock.acquire(False):
+            #Could not aquire lock, return
+            return
+            
         try:
-            self.interrupts = 0
-            #if self.lock.aquire(blocking = False):
-            with self.lock:
-                data = self.dev.read_data_bytes(2)
-                if len(data) == 0 or data[0] != 0xDC:
-                    return
-                data += self.dev.read_data_bytes(11)
+            data = self.dev.read_data_bytes(2)
+            if len(data) == 0 or data[0] != 0xDC:
+                return
+
+            data += self.dev.read_data_bytes(11)
             
             self.s.Verbose("data: %s" % str(data))
-            #print "interrupt"
-            #offset = data.index(0xDC)
-            #if offset > 0:
-            #    data = data[offset:]
-            #    data += self.dev.read_data_bytes(offset)
-            
-            '''
-            if len(data) > 2:
-                #if self.s: self.s.Debug( "Data: %s" % str(data))
-                pass
-            '''
-            
-            '''
-            if data[0] == 50 and data[1] == 96:
-                data += data[2:] + self.dev.read_data_bytes(2)
-            
-            '''
+
             if len(data) != 13:
                 print "data length is not 13!: %s" % str(data)
             
@@ -430,13 +440,19 @@ class WorkerThread(threading.Thread):
                                 data[12])
 
             if self.interrupts > 0:
-                #if self.s: self.s.Debug( "Got Interrupts: 0x%08X" % interrupts)
                 self.process_interrupts(self.interrupts)
-                self.interrupt_update_callback(self.interrupts)
+                self.iuc(self.interrupts)
                 #print "Interrupt finished"
+
+        except TypeError as ex:
+            print "Type Error: %s" % str(ex)
         except:
-            pass
+            print "Error while reading interrupts: %s" % sys.exc_info()[0]
             #print "Exception when reading interrupts"
+
+        finally:
+            self.lock.release()
+
 
     def process_interrupts(self, interrupts):
         for i in range(INTERRUPT_COUNT):
@@ -445,17 +461,16 @@ class WorkerThread(threading.Thread):
             if len(self.interrupts_cb[i]) == 0:
                 continue
             #Call all callbacks
-            self.s.Debug( "Calling callback for: %d" % i)
+            #self.s.Debug( "Calling callback for: %d" % i)
             for cb in self.interrupts_cb[i]:
                 try:
+                    #print "callback %s" % str(cb)
                     cb()
                 except TypeError:
                     #If an error occured when calling a callback removed if from
                     #our list
                     self.interrupts_cb.remove(cb)
                     #self.s.Debug( "Error need to remove callback")
-
-
 
     def register_interrupt_cb(self, index, cb):
         if index > INTERRUPT_COUNT - 1:
@@ -471,17 +486,6 @@ class WorkerThread(threading.Thread):
 
         elif cb in interrupt_list:
             interrupt_list.remove(cb)
-
-
-_dionysus_instances = {}
-
-def Dionysus(idVendor = 0x0403, idProduct = 0x8530, sernum = None, status = False):
-    global _dionysus_instances
-    if sernum in _dionysus_instances:
-        return _dionysus_instances[sernum]
-    _dionysus_instances[sernum] = _Dionysus(idVendor, idProduct, sernum, status)
-    return _dionysus_instances[sernum]
-        
 
 class _Dionysus (Nysa):
     """
@@ -518,7 +522,12 @@ class _Dionysus (Nysa):
 
         self.d = DionysusData()
 
-        self.worker = WorkerThread(self.dev, self.hwq, self.hrq, self.d, self.lock, self.interrupt_update_callback)
+        self.worker = WorkerThread(self.dev,
+                                   self.hwq,
+                                   self.hrq,
+                                   self.d,
+                                   self.lock,
+                                   self.interrupt_update_callback)
         #Is there a way to indicate closing
         self.worker.setDaemon(True)
         self.worker.start()
@@ -527,6 +536,7 @@ class _Dionysus (Nysa):
             #XXX: Hack to fix a strange bug where FTDI
             #XXX: won't recognize Dionysus until a read and reset occurs
             self.ping()
+
         except NysaCommError:
             pass
 
@@ -602,11 +612,12 @@ class _Dionysus (Nysa):
         try:
             resp = self.hrq.get(block = True, timeout = DIONYSUS_QUEUE_TIMEOUT)
             if resp == DIONYSUS_RESP_OK:
+                print "%s got an OK response!" % current_thread().name
                 return self.d.data
             else:
                 raise NysaCommError("Dionysus response error %s: %d" % (name, resp))
         except Queue.Empty:
-            raise NysaCommError("Dionysus error %s: timeout" % name)
+            raise NysaCommError("Dionysus error %s: timeout: %d" % (name, DIONYSUS_QUEUE_TIMEOUT))
 
     def read(self, device_id, address, length = 1, memory_device = False):
         """read
@@ -638,8 +649,10 @@ class _Dionysus (Nysa):
             NysaCommError
         """
         #self.s = True
+        print "%s: read: lock state (locked == true): %s" % (current_thread().name, str(self.lock.locked()))
         with self.lock:
-            if self.s: self.s.Debug( "Reading...")
+            print "lock acquired for read"
+            #if self.s: self.s.Debug( "Reading...")
             
             #Set up the ID and the 'Read command (0x02)'
             self.d.data = Array('B', [0xCD, 0x02])
@@ -665,8 +678,7 @@ class _Dionysus (Nysa):
             #Add the address
             addr_string = "%06X" % address
             self.d.data.fromstring(addr_string.decode('hex'))
-            if self.s:
-                self.s.Debug( "DEBUG: Data read string: %s" % str(self.d.data))
+            self.s.Debug( "DEBUG: Data read string: %s" % str(self.d.data))
             
             self.d.length = length
             self.hwq.put(DIONYSUS_READ)
@@ -702,7 +714,9 @@ class _Dionysus (Nysa):
         Raises:
             NysaCommError
         """
+        print "%s: write: lock state (locked == true): %s" % (current_thread().name, str(self.lock.locked()))
         with self.lock:
+            print "lock acquired for write"
             length = len(data) / 4
             #Create an Array with the identification byte and code for writing
             self.d.data = Array ('B', [0xCD, 0x01])
@@ -878,6 +892,7 @@ class _Dionysus (Nysa):
             dev_id = 0
 
         e = self.events[dev_id]
+        print "Checking events!"
 
         with self.lock:
             #Check if we have interrupts
@@ -887,13 +902,17 @@ class _Dionysus (Nysa):
             #if we don't have interrupts clear the associated event
             e.clear()
 
+        print "Waiting for interrupts"
         if e.wait(wait_time):
+            print "Found interrupts!"
             #self.s.Debug( "Found interrupts")
             return True
+        print "did not find interrupts"
         e.set()
         return False
 
     def interrupt_update_callback(self, interrupts):
+        print "Entered interrupt update callback"
         self.interrupts = interrupts
         for i in range (INTERRUPT_COUNT):
             if i == 0:
