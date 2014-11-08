@@ -126,8 +126,8 @@ class WorkerThread(threading.Thread):
 
     def run(self):
         self.s = status.Status()
-        self.s.set_level(status.StatusLevel.VERBOSE)
-        #self.s.set_level(status.StatusLevel.INFO)
+        #self.s.set_level(status.StatusLevel.VERBOSE)
+        self.s.set_level(status.StatusLevel.FATAL)
         wdata = None
         rdata = None
         while (1):
@@ -612,7 +612,7 @@ class _Dionysus (Nysa):
         try:
             resp = self.hrq.get(block = True, timeout = DIONYSUS_QUEUE_TIMEOUT)
             if resp == DIONYSUS_RESP_OK:
-                print "%s got an OK response!" % current_thread().name
+                #print "%s got an OK response!" % current_thread().name
                 return self.d.data
             else:
                 raise NysaCommError("Dionysus response error %s: %d" % (name, resp))
@@ -649,9 +649,9 @@ class _Dionysus (Nysa):
             NysaCommError
         """
         #self.s = True
-        print "%s: read: lock state (locked == true): %s" % (current_thread().name, str(self.lock.locked()))
+        #print "%s: read: lock state (locked == true): %s" % (current_thread().name, str(self.lock.locked()))
         with self.lock:
-            print "lock acquired for read"
+            #print "lock acquired for read"
             #if self.s: self.s.Debug( "Reading...")
             
             #Set up the ID and the 'Read command (0x02)'
@@ -714,9 +714,9 @@ class _Dionysus (Nysa):
         Raises:
             NysaCommError
         """
-        print "%s: write: lock state (locked == true): %s" % (current_thread().name, str(self.lock.locked()))
+        #print "%s: write: lock state (locked == true): %s" % (current_thread().name, str(self.lock.locked()))
         with self.lock:
-            print "lock acquired for write"
+            #print "lock acquired for write"
             length = len(data) / 4
             #Create an Array with the identification byte and code for writing
             self.d.data = Array ('B', [0xCD, 0x01])
@@ -912,7 +912,7 @@ class _Dionysus (Nysa):
         return False
 
     def interrupt_update_callback(self, interrupts):
-        print "Entered interrupt update callback"
+        #print "Entered interrupt update callback"
         self.interrupts = interrupts
         for i in range (INTERRUPT_COUNT):
             if i == 0:
