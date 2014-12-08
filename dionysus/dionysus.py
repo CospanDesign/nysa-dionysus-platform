@@ -134,18 +134,18 @@ class WorkerThread(threading.Thread):
             try:
                 try:
                     wdata = self.hwq.get(block = True, timeout = INTERRUPT_SLEEP)
-
+                    
                 except Queue.Empty:
                     #Timeout has occured, read and process interrupts
                     #print ".",
                     self.check_interrupt()
-                    continue
- 
+                    continue 
+
                 #Check for finish condition
                 if wdata is None:
                     #if write data is None then we are done
                     return
-             
+                     
                 if wdata == DIONYSUS_RESET:
                     self.reset()
                 elif wdata == DIONYSUS_PING:
@@ -159,14 +159,11 @@ class WorkerThread(threading.Thread):
                 else:
                     print "Unrecognized command from write queue: %d" % wdata
 
-
             except AttributeError:
                 print "closing dionysus worker thread"
                 #If the queue is none then it was destroyed by the main thread
                 #we are done then
                 return
-
-
 
     def reset(self):
         vendor = self.d.data[0]
@@ -452,7 +449,6 @@ class WorkerThread(threading.Thread):
 
         finally:
             self.lock.release()
-
 
     def process_interrupts(self, interrupts):
         for i in range(INTERRUPT_COUNT):
