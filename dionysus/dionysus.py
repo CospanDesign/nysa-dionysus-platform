@@ -615,7 +615,7 @@ class _Dionysus (Nysa):
         except Queue.Empty:
             raise NysaCommError("Dionysus error %s: timeout: %d" % (name, DIONYSUS_QUEUE_TIMEOUT))
 
-    def read(self, device_id, address, length = 1, memory_device = False):
+    def read(self, device_id, address, length = 1, memory_device = False, disable_auto_inc = False):
         """read
 
         read data from Dionysus
@@ -656,7 +656,11 @@ class _Dionysus (Nysa):
                 if self.s:
                     self.s.Debug( "Read from Memory Device")
                 #'OR' the 0x10 flag to indicate that we are using the memory bus
-                self.d.data = Array('B', [0xCD, 0x12])
+                #self.d.data = Array('B', [0xCD, 0x12])
+                self.d.data[1] = self.d.data[1] | 0x10
+
+            if disable_auto_inc:
+                self.d.data[1] = self.d.data[1] | 0x20
             
             #Add the length value to the array
             fmt_string = "%06X" % length
@@ -681,7 +685,7 @@ class _Dionysus (Nysa):
             return self.ipc_comm_response("read")
 
 
-    def write(self, device_id, address, data, memory_device=False):
+    def write(self, device_id, address, data, memory_device=False, disable_auto_inc = False):
         """write
 
         Write data to a Nysa image
@@ -719,7 +723,10 @@ class _Dionysus (Nysa):
             if memory_device:
                 if self.s:
                     self.s.Debug( "Memory Device")
-                self.d.data = Array('B', [0xCD, 0x11])
+                #self.d.data = Array('B', [0xCD, 0x11])
+                self.d.data[1] = self.d.data[1] | 0x10
+            if disable_auto_inc:
+                self.d.data[1] = self.d.data[1] | 0x20
             
             #Append the length into the first 24 bits
             fmt_string = "%06X" % length
@@ -888,7 +895,7 @@ class _Dionysus (Nysa):
             dev_id = 0
 
         e = self.events[dev_id]
-        print "Checking events!"
+        #print "Checking events!"
 
         with self.lock:
             #Check if we have interrupts
@@ -898,12 +905,12 @@ class _Dionysus (Nysa):
             #if we don't have interrupts clear the associated event
             e.clear()
 
-        print "Waiting for interrupts"
+        #print "Waiting for interrupts"
         if e.wait(wait_time):
-            print "Found interrupts!"
+            #print "Found interrupts!"
             #self.s.Debug( "Found interrupts")
             return True
-        print "did not find interrupts"
+        #print "did not find interrupts"
         e.set()
         return False
 
