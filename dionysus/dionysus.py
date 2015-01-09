@@ -631,8 +631,8 @@ class _Dionysus (Nysa):
                (4 bytes including offset for mem)
 
         Args:
-            device_id (int): Device Identification number, found in the DRT
-                (DRT Address = 0)
+            device_id (int): Device Identification number, found in the SDB
+                (SDB Address = 0)
             address (int): Address of the register/memory to read
             memory_device (boolean): True if the device is on the memory bus
             length (int): Number of 32-bit words to read
@@ -702,7 +702,7 @@ class _Dionysus (Nysa):
            DD: Data (4 bytes)
 
         Args:
-            device_id (int): Device identification number, found in the DRT
+            device_id (int): Device identification number, found in the SDB
             address (int): Address of the register/memory to write to
             memory_device (boolean):
                 True: Memory device
