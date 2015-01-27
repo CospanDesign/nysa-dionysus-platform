@@ -121,13 +121,13 @@ class WorkerThread(threading.Thread):
             self.interrupts_cb.append([])
 
     def last_ref(self):
-        self.s.Important("Last reference")
+        #self.s.Important("Last reference")
         self.hwq.put(None)
 
     def run(self):
-        self.s = status.Status()
+        #self.s = status.Status()
         #self.s.set_level(status.StatusLevel.VERBOSE)
-        self.s.set_level(status.StatusLevel.FATAL)
+        #self.s.set_level(status.StatusLevel.FATAL)
         wdata = None
         rdata = None
         while (1):
@@ -185,31 +185,32 @@ class WorkerThread(threading.Thread):
 
         rsp = Array ('B')
         #self.s = True
-        if self.s and (len(self.d.data) < 100):
-            self.s.Debug( "Data Out: %s" % str(self.d.data))
+        #if self.s and (len(self.d.data) < 100):
+        #    self.s.Debug( "Data Out: %s" % str(self.d.data))
 
         #rsp = Array ('B')
         rsp = self.dev.read_data_bytes(1)
 
         if len(rsp) > 0 and rsp[0] == 0xDC:
-            self.s.Debug( "Got a Response")
+            #self.s.Debug( "Got a Response")
+            pass
         else:
             timeout = time.time() + DIONYSUS_WRITE_TIMEOUT
             while time.time() < timeout:
                 rsp = self.dev.read_data_bytes(1)
                 if len(rsp) > 0 and rsp[0] == 0xDC:
-                    self.s.Debug( "Got a Response")
+                    #self.s.Debug( "Got a Response")
                     break
 
         if len(rsp) > 0:
             if rsp[0] != 0xDC:
-                self.s.Error( "Reponse ID Not found")
+                #self.s.Error( "Reponse ID Not found")
                 #raise NysaCommError("Did not find ID byte (0xDC) in response: %s" % str(rsp))
                 self.hrq.put(DIONYSUS_RESP_ERR)
                 return
 
         else:
-            self.s.Error("No Response")
+            #self.s.Error("No Response")
             #raise NysaCommError ("Timeout while waiting for response")
             self.hrq.put(DIONYSUS_RESP_ERR)
             return
@@ -225,7 +226,7 @@ class WorkerThread(threading.Thread):
             rsp += self.dev.read_data_bytes(12 - read_count)
             read_count = len(rsp)
 
-        self.s.Debug( "DEBUG: Write Response: %s" % str(rsp[0:8]))
+        #self.s.Debug( "DEBUG: Write Response: %s" % str(rsp[0:8]))
         #self.s.Debug( "Response: %s" % str(rsp))
 
         self.hrq.put(DIONYSUS_RESP_OK)
@@ -234,33 +235,34 @@ class WorkerThread(threading.Thread):
         length = self.d.length
         self.dev.purge_buffers()
         dout = self.d.data
-        self.s.Debug( "READ Request: Data Out: %s" % str(self.d.data))
+        #self.s.Debug( "READ Request: Data Out: %s" % str(self.d.data))
 
         self.dev.write_data(self.d.data)
 
         rsp = Array ('B')
         rsp = self.dev.read_data_bytes(2)
         if len(rsp) > 1 and rsp[0] == 0xDC and rsp[1] == 0xFD:
-            if self.s: self.s.Debug("Got a Response")
+            #if self.s: self.s.Debug("Got a Response")
+            pass
         else:
             timeout = time.time() + DIONYSUS_READ_TIMEOUT
             while time.time() < timeout:
                 rsp = self.dev.read_data_bytes(1)
                 if len(rsp) > 0 and rsp[0] == 0xDC:
-                    if self.s: self.s.Debug( "Got a Response")
+                    #if self.s: self.s.Debug( "Got a Response")
                     break
 
         if len(rsp) > 0:
             if rsp[0] != 0xDC:
-                if self.s:
-                    self.s.Error("Response Not Found")
+                #if self.s:
+                #    self.s.Error("Response Not Found")
                 #raise NysaCommError("Did not find identification byte (0xDC): %s" % str(rsp))
                 self.hrq.put(DIONYSUS_RESP_ERR)
                 return
 
         else:
-            if self.s:
-                self.s.Error("Timed out while waiting for response")
+            #if self.s:
+            #    self.s.Error("Timed out while waiting for response")
             #raise NysaCommError("Timeout while waiting for a response")
             self.hrq.put(DIONYSUS_RESP_ERR)
             return
@@ -280,6 +282,7 @@ class WorkerThread(threading.Thread):
             read_count = len(rsp)
 
         #self.s = True
+        '''
         if self.s:
             self.s.Debug("DEBUG READ:")
             if (time.time() > timeout):
@@ -294,6 +297,7 @@ class WorkerThread(threading.Thread):
                 self.s.Debug( "\tResponse Data:\n\t%s" % str(rsp[:40]))
             else:
                 self.s.Debug( "\tResponse Data:\n\t%s" % str(rsp))
+        '''
         #self.s = False
         #self.s = False
         self.d.data = rsp[8:]
@@ -302,8 +306,8 @@ class WorkerThread(threading.Thread):
     def ping(self):
         data = Array('B')
         data.extend([0xCD, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-        if self.s:
-            self.s.Debug( "Sending ping...",)
+        #if self.s:
+        #    self.s.Debug( "Sending ping...",)
 
 
         self.dev.write_data(data)
@@ -318,14 +322,14 @@ class WorkerThread(threading.Thread):
             rsp = self.dev.read_data_bytes(5)
             temp.extend(rsp)
             if 0xDC in rsp:
-                if self.s:
-                    self.s.Debug( "Response to Ping")
-                    self.s.Debug( "Resposne: %s" % str(temp))
+                #if self.s:
+                #    self.s.Debug( "Response to Ping")
+                #    self.s.Debug( "Resposne: %s" % str(temp))
                 break
 
         if not 0xDC in rsp:
-            if self.s:
-                self.s.Debug( "ID byte not found in response")
+            #if self.s:
+            #    self.s.Debug( "ID byte not found in response")
             #raise NysaCommError("Ping response did not contain ID: %s" % str(temp))
             self.hrq.put(DIONYSUS_RESP_ERR)
             return
@@ -337,16 +341,16 @@ class WorkerThread(threading.Thread):
         num = 3 - index
         read_data.extend(self.dev.read_data_bytes(num))
 
-        if self.s:
-            self.s.Debug( "Success")
+        #if self.s:
+        #    self.s.Debug( "Success")
 
         self.hrq.put(DIONYSUS_RESP_OK)
 
     def dump_core(self):
         data = Array ('B')
         data.extend([0xCD, 0x0F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-        if self.s:
-            self.s.Debug( "Sending core dump request...")
+        #if self.s:
+        #    self.s.Debug( "Sending core dump request...")
 
         self.dev.purge_buffers()
         self.dev.write_data(data)
@@ -360,12 +364,12 @@ class WorkerThread(threading.Thread):
             rsp = self.dev.read_data_bytes(1)
             temp.extend(rsp)
             if 0xDC in rsp:
-                self.s.Debug( "Read a response from the core dump")
+                #self.s.Debug( "Read a response from the core dump")
                 break
 
         if not 0xDC in rsp:
-            if self.s:
-                self.s.Debug( "Response not found!")
+            #if self.s:
+            #    self.s.Debug( "Response not found!")
             raise NysaCommError("Response Not Found")
 
         rsp = Array ('B')
@@ -381,10 +385,12 @@ class WorkerThread(threading.Thread):
 
 
         count = (rsp[1] << 16 | rsp[2] << 8 | rsp[3]) * 4
+        '''
         if self.s:
             self.s.Debug( "Length of read:%d" % len(rsp))
             self.s.Debug( "Data: %s" % str(rsp))
             self.s.Debug( "Number of core registers: %d" % (count / 4))
+        '''
 
         timeout = time.time() + wait_time
         read_total = count
@@ -395,11 +401,12 @@ class WorkerThread(threading.Thread):
             rsp += self.dev.read_data_bytes(read_total - read_count)
             read_count = len(rsp)
 
-        if self.s:
-            self.s.Debug( "Length read: %d" % (len(rsp) / 4))
-            self.s.Debug( "Data: %s" % str(rsp))
+        #if self.s:
+        #    self.s.Debug( "Length read: %d" % (len(rsp) / 4))
+        #    self.s.Debug( "Data: %s" % str(rsp))
 
         core_data = Array('L')
+        '''
         for i in range(0, count, 4):
             if self.s:
                 self.s.Debug( "Count: %d" % i)
@@ -408,6 +415,7 @@ class WorkerThread(threading.Thread):
 
         if self.s:
             self.s.Debug( "Core Data: %s" % str(core_data))
+        '''
 
         self.d.data = core_data
         self.hrq.put(DIONYSUS_RESP_OK)
@@ -426,7 +434,7 @@ class WorkerThread(threading.Thread):
 
             data += self.dev.read_data_bytes(11)
             
-            self.s.Verbose("data: %s" % str(data))
+            #self.s.Verbose("data: %s" % str(data))
 
             if len(data) != 13:
                 print "data length is not 13!: %s" % str(data)
@@ -496,7 +504,6 @@ class _Dionysus (Nysa):
         self.product = idProduct
         self.sernum = sernum
 
-        self.s = status
         self.dev = None
         #Run a full garbage collection so any previous references to Dionysus will be removed
         gc.collect()
@@ -550,7 +557,7 @@ class _Dionysus (Nysa):
         '''
 
     def __del__(self):
-        if self.s: self.s.Debug( "Close reader thread")
+        #if self.s: self.s.Debug( "Close reader thread")
         #self.lock.aquire()
         #if (self.reader_thread is not None) and self.reader_thread.isAlive():
         #    self.reader_thread.stop()
@@ -558,8 +565,9 @@ class _Dionysus (Nysa):
         #    self.reader_thread.join()
         #self.lock.release()
         #self.s = True
-        if self.s: self.s.Debug( "Reader thread joined")
-        self.dev.close()
+        #if self.s: self.s.Debug( "Reader thread joined")
+        #self.dev.close()
+        pass
 
     def _open_dev(self):
         """_open_dev
@@ -603,7 +611,6 @@ class _Dionysus (Nysa):
         #Enable MPSSE Mode
         self.dev.set_bitmode(0x00, Ftdi.BITMODE_SYNCFF)
 
-
     def ipc_comm_response(self, name):
         try:
             resp = self.hrq.get(block = True, timeout = DIONYSUS_QUEUE_TIMEOUT)
@@ -615,7 +622,7 @@ class _Dionysus (Nysa):
         except Queue.Empty:
             raise NysaCommError("Dionysus error %s: timeout: %d" % (name, DIONYSUS_QUEUE_TIMEOUT))
 
-    def read(self, device_id, address, length = 1, memory_device = False, disable_auto_inc = False):
+    def read(self, address, length = 1, memory_device = False, disable_auto_inc = False):
         """read
 
         read data from Dionysus
@@ -631,8 +638,6 @@ class _Dionysus (Nysa):
                (4 bytes including offset for mem)
 
         Args:
-            device_id (int): Device Identification number, found in the SDB
-                (SDB Address = 0)
             address (int): Address of the register/memory to read
             memory_device (boolean): True if the device is on the memory bus
             length (int): Number of 32-bit words to read
@@ -653,8 +658,8 @@ class _Dionysus (Nysa):
             #Set up the ID and the 'Read command (0x02)'
             self.d.data = Array('B', [0xCD, 0x02])
             if memory_device:
-                if self.s:
-                    self.s.Debug( "Read from Memory Device")
+                #if self.s:
+                #    self.s.Debug( "Read from Memory Device")
                 #'OR' the 0x10 flag to indicate that we are using the memory bus
                 #self.d.data = Array('B', [0xCD, 0x12])
                 self.d.data[1] = self.d.data[1] | 0x10
@@ -669,23 +674,17 @@ class _Dionysus (Nysa):
             #Add the device Number
             
             #XXX: Memory devices don't have an offset (should they?)
-            offset_string = "00"
-            if not memory_device:
-                offset_string = "%02X" % device_id
-            
-            self.d.data.fromstring(offset_string.decode('hex'))
             
             #Add the address
-            addr_string = "%06X" % address
+            addr_string = "%08X" % address
             self.d.data.fromstring(addr_string.decode('hex'))
-            self.s.Debug( "DEBUG: Data read string: %s" % str(self.d.data))
+            #self.s.Debug( "DEBUG: Data read string: %s" % str(self.d.data))
             
             self.d.length = length
             self.hwq.put(DIONYSUS_READ)
             return self.ipc_comm_response("read")
 
-
-    def write(self, device_id, address, data, memory_device=False, disable_auto_inc = False):
+    def write(self, address, data, memory_device=False, disable_auto_inc = False):
         """write
 
         Write data to a Nysa image
@@ -702,7 +701,6 @@ class _Dionysus (Nysa):
            DD: Data (4 bytes)
 
         Args:
-            device_id (int): Device identification number, found in the SDB
             address (int): Address of the register/memory to write to
             memory_device (boolean):
                 True: Memory device
@@ -721,8 +719,10 @@ class _Dionysus (Nysa):
             #Create an Array with the identification byte and code for writing
             self.d.data = Array ('B', [0xCD, 0x01])
             if memory_device:
+                '''
                 if self.s:
                     self.s.Debug( "Memory Device")
+                '''
                 #self.d.data = Array('B', [0xCD, 0x11])
                 self.d.data[1] = self.d.data[1] | 0x10
             if disable_auto_inc:
@@ -731,18 +731,16 @@ class _Dionysus (Nysa):
             #Append the length into the first 24 bits
             fmt_string = "%06X" % length
             self.d.data.fromstring(fmt_string.decode('hex'))
-            offset_string = "00"
-            if not memory_device:
-                offset_string = "%02X" % device_id
-            self.d.data.fromstring(offset_string.decode('hex'))
-            addr_string = "%06X" % address
+            addr_string = "%08X" % address
             self.d.data.fromstring(addr_string.decode('hex'))
             self.d.data.extend(data)
+            '''
             if self.s:
                 self.s.Debug( "Length: %d" % len(data))
                 self.s.Debug( "Reported Length: %d" % length)
                 self.s.Debug( "Writing: %s" % str(self.d.data[0:9]))
                 self.s.Debug( "\tData: %s" % str(self.d.data[9:13]))
+            '''
             
             self.hwq.put(DIONYSUS_WRITE)
             self.ipc_comm_response("write")
@@ -939,3 +937,5 @@ class _Dionysus (Nysa):
     def list_ioctl(self):
         raise AssertionError("%s not implemented" % sys._getframe().f_code.co_name, self.s)
 
+    def get_sdb_base_address(self):
+        return 0x00000000
