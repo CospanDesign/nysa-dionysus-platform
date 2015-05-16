@@ -85,7 +85,8 @@ class DionysusPlatform(Platform):
             if SYSTEM_DIST[0] == "Ubuntu":
                 print "Found Ubuntu platform, copying over rules, make sure to restart udev rules"
                 dest_path = "/etc/udev/rules.d/66-dionysus.rules"
-                cmd = "sudo cp %s %s" % (source_path, dest_path)
-                v = subprocess.call([cmd])
+                cmd = ["sudo", "cp", source_path, dest_path]
+                print "command: %s" % cmd
+                v = subprocess.call(cmd)
         return
 
