@@ -78,7 +78,7 @@ class DionysusPlatform(Platform):
         if platform.system() == "Linux":
             print "linux distribution: %s" % platform.linux_distribution()[0]
             
-            source_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "board", "66-dionysus.rules")
+            source_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "board", "66-dionysus.rules"))
             if platform.linux_distribution()[0] == "Ubuntu":
                 print "Found Ubuntu platform, copying over rules, make sure to restart udev rules"
                 dest_path = "/etc/udev/rules.d/66-dionysus.rules"
