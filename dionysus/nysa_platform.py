@@ -26,6 +26,8 @@ __author__ = 'dave.mccoy@cospandesign.com (Dave McCoy)'
 
 import sys
 import os
+import platform
+import shutil
 
 from nysa.host.nysa_platform import Platform
 import usb.core
@@ -72,5 +74,13 @@ class DionysusPlatform(Platform):
         return True
 
     def setup_platform(self):
-        print "Attempting to setup dionysus platform"
+        print "platform: %s" % platform.system()
+        if platform.system() == "Linux":
+            print "linux distribution: %s" % platform.linux_distribution()[0]
+            
+            source_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "board", "66-dionysus.rules")
+            if platform.linux_distribution()[0] == "Ubuntu":
+                print "Found Ubuntu platform, copying over rules, make sure to restart udev rules"
+                dest_path = "/etc/udev/rules.d/66-dionysus.rules"
+                shutil.copy(source_path, dest_path)
         return
