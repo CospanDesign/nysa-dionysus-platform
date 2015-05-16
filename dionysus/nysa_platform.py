@@ -78,9 +78,9 @@ class DionysusPlatform(Platform):
         return True
 
     def setup_platform(self):
-        print "platform: %s" % host_platform.system()
+        print "platform: %s" % SYSTEM_NAME
         if SYSTEM_NAME == "Linux":
-            print "linux distribution: %s" % host_platform.linux_distribution()[0]
+            print "linux distribution: %s" % SYSTEM_DIST[0]
             
             source_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "board", "66-dionysus.rules"))
             if SYSTEM_DIST[0] == "Ubuntu":
