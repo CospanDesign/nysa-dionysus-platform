@@ -26,7 +26,6 @@ __author__ = 'dave.mccoy@cospandesign.com (Dave McCoy)'
 
 import sys
 import os
-import platform
 import shutil
 
 from nysa.host.nysa_platform import Platform
@@ -75,6 +74,7 @@ class DionysusPlatform(Platform):
 
     def setup_platform(self):
         print "platform: %s" % platform.system()
+        import platform
         if platform.system() == "Linux":
             print "linux distribution: %s" % platform.linux_distribution()[0]
             
