@@ -27,8 +27,7 @@ __author__ = 'dave.mccoy@cospandesign.com (Dave McCoy)'
 import sys
 import os
 import shutil
-
-   
+import subprocess
 
 from nysa.host.nysa_platform import Platform
 from nysa.host.nysa_platform import SYSTEM_NAME
@@ -86,6 +85,7 @@ class DionysusPlatform(Platform):
             if SYSTEM_DIST[0] == "Ubuntu":
                 print "Found Ubuntu platform, copying over rules, make sure to restart udev rules"
                 dest_path = "/etc/udev/rules.d/66-dionysus.rules"
-                shutil.copy(source_path, dest_path)
+                cmd = "sudo cp %s %s" % (source_path, dest_path)
+                v = subprocess.call([cmd])
         return
 
