@@ -73,8 +73,8 @@ class DionysusPlatform(Platform):
         return True
 
     def setup_platform(self):
-        print "platform: %s" % platform.system()
         import platform
+        print "platform: %s" % platform.system()
         if platform.system() == "Linux":
             print "linux distribution: %s" % platform.linux_distribution()[0]
             
