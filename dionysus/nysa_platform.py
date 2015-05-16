@@ -26,7 +26,6 @@ __author__ = 'dave.mccoy@cospandesign.com (Dave McCoy)'
 
 import sys
 import os
-import shutil
 import subprocess
 
 from nysa.host.nysa_platform import Platform

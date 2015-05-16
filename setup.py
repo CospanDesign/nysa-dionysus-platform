@@ -29,6 +29,7 @@ setup(
     install_requires=['nysa',
                       'pyusb>=1.0.0b1',
                       'pyserial>=2.6'
+
     ],
     include_package_data = True,
     long_description=long_desc,
