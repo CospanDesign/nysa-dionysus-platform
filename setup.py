@@ -26,7 +26,7 @@ setup(
     package_data={'' : ["*.json", "*.png", "*.ucf"]},
     install_requires = [
         "nysa",
-        "pyftdi"
+        "pyftdi>=0.10.0"
     ],
     include_package_data = True,
     long_description=long_desc,
