@@ -30,7 +30,7 @@ import os
 from nysa.host.nysa_platform import Platform
 import usb.core
 import usb.util
-from pyftdi.pyftdi.ftdi import Ftdi
+from ftdi import Ftdi
 
 sys.path.append(os.path.join(os.path.dirname(__file__),
                              os.pardir,
@@ -71,3 +71,6 @@ class DionysusPlatform(Platform):
             return False
         return True
 
+    def setup_platform(self):
+        print "Attempting to setup dionysus platform"
+        return

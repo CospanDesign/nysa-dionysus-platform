@@ -1,8 +1,10 @@
-from pyftdi.pyftdi import spi
 from array import array as Array
 import serialflash
 import time
 import json
+
+sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir))
+from spi import SpiController
 from serialflash import SerialFlash #SerialFlash base class
 
 class SPIProm(SerialFlash):
@@ -156,7 +158,7 @@ class SPIProm(SerialFlash):
             raise SerialFlashValueError("Out of Range")
         buf = Array('B')
         while length > 0:
-            size = min(length, spi.SpiController.PAYLOAD_MAX_LENGTH)
+            size = min(length, SpiController.PAYLOAD_MAX_LENGTH)
             data = self._read_hi_speed(address, size)
             length -= len(data)
             address += len(data)

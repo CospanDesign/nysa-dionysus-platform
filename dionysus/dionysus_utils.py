@@ -6,7 +6,8 @@ import time
 import argparse
 from array import array as Array
 
-from pyftdi.pyftdi.ftdi import Ftdi
+#from pyftdi.pyftdi.ftdi import Ftdi
+from ftdi import Ftdi
 
 from fifo.fifo import FifoController
 from spi_flash import serial_flash_manager
