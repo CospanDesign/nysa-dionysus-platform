@@ -1,5 +1,8 @@
 *.py[cod]
 
+#Pycharm
+.idea
+
 # VIM temporary files
 *~
 *.swp
