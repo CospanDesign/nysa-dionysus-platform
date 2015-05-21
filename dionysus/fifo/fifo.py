@@ -4,8 +4,8 @@ Nysa FIFO Control
 import sys
 import os
 
-sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir))
-from ftdi import Ftdi
+sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
+from dionysus.ftdi import Ftdi
 from array import array as Array
 
 
