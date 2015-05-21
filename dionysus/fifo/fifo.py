@@ -20,7 +20,6 @@ class FifoController(object):
         Ftdi.frequency_max = 30.0E6
         self.f = Ftdi()
 
-
     def set_sync_fifo(self, frequency = 30.0E6, latency = 2):
         """Configure the interface for synchronous FIFO mode"""
         #self.f.add_type(self.vendor, self.product, 0x700, "ft2232h")
