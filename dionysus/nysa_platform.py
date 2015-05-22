@@ -58,8 +58,7 @@ class DionysusPlatform(Platform):
     def scan(self):
         #print ("Scanning...")
         if self.status: self.status.Verbose("Scanning")
-        #devices = usb.core.find(find_all = True)
-        devices = usb.core.find(idVendor=self.vendor, idProduct=self.product)
+        devices = usb.core.find(find_all = True)
         for device in devices:
             if device.idVendor == self.vendor and device.idProduct == self.product:
                 #sernum = usb.util.get_string(device, 64, device.iSerialNumber)
