@@ -37,7 +37,7 @@ def upload(vendor, product, serial_number, filepath, status):
         s = status
         binf = ""
 
-        f = open(filepath, "r")
+        f = open(filepath, "rb")
         binf = f.read()
         f.close()
 
@@ -198,7 +198,6 @@ class Controller(object):
         if binf_str != binf:
             raise NysaError("Image Verification Failed!, data written is not the same as data read")
 
-
     def program(self):
         """
         Send a program signal to the board, the FPGA will attempt to read the
@@ -225,7 +224,6 @@ class Controller(object):
         bbc.program_high()
         bbc.pins_on()
         bbc.set_pins_to_input()
-
 
     def read_bin_file(self, filepath):
         """
