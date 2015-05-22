@@ -28,8 +28,8 @@ import sys
 import json
 from array import array as Array
 
-sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir))
-from spi import SpiController
+sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
+from dionysus.spi import SpiController
 
 
 #Get all types of the SPI Flash
