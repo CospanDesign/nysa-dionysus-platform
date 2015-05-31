@@ -78,6 +78,7 @@ DIONYSUS_WRITE = 2
 DIONYSUS_READ = 3
 DIONYSUS_PING = 4
 DIONYSUS_DUMP_CORE = 5
+DIONYSUS_IS_PROGRAMMED = 6
 
 DIONYSUS_RESP_OK = 0
 DIONYSUS_RESP_ERR = -1
@@ -144,6 +145,8 @@ class WorkerThread(threading.Thread):
 
                 if wdata == DIONYSUS_RESET:
                     self.reset()
+                elif wdata == DIONYSUS_IS_PROGRAMMED:
+                    self.is_programmed()
                 elif wdata == DIONYSUS_PING:
                     self.ping()
                 elif wdata == DIONYSUS_WRITE:
@@ -172,6 +175,15 @@ class WorkerThread(threading.Thread):
         bbc.soft_reset_low()
         time.sleep(.2)
         bbc.soft_reset_high()
+        bbc.pins_on()
+        bbc.set_pins_to_input()
+        self.hrq.put(DIONYSUS_RESP_OK)
+
+    def is_programmed(self):
+        vendor = self.d.data[0]
+        product = self.d.data[1]
+        bbc = BitBangController(vendor, product, 2)
+        self.d.data = bbc.read_done_pin()
         bbc.pins_on()
         bbc.set_pins_to_input()
         self.hrq.put(DIONYSUS_RESP_OK)
@@ -743,6 +755,25 @@ class _Dionysus (Nysa):
             self.d.data = (self.vendor, self.product)
             self.hwq.put(DIONYSUS_RESET)
             self.ipc_comm_response("reset")
+
+    def is_programmed(self):
+        """
+        Check if the FPGA is programmed
+
+        Args:
+            Nothing
+
+        Return (Boolean):
+            True: FPGA is programmed
+            False: FPGA is not programmed
+
+        Raises:
+            NysaCommError: Failue in communication
+        """
+        with self.lock:
+            self.d.data = (self.vendor, self.product)
+            self.hwq.put(DIONYSUS_IS_PROGRAMMED)
+            return self.ipc_comm_response("is programmed")
 
     def dump_core(self):
         """ dump_core
