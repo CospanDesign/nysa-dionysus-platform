@@ -1,5 +1,6 @@
-NET "clk"     LOC = P51;
-TIMESPEC "ts_clk" = PERIOD "clk" 20 ns HIGH 50%;
+NET CLK     LOC = P51 | IOSTANDARD = LVCMOS33;
+NET "clk_BUFGP" TNM = "tnm_main_clk_group";
+TIMESPEC "ts_clk" = PERIOD "tnm_main_clk_group" 20.000 ns HIGH 50%;
 
 #BOARD LED's
 NET LED<0>     LOC = P134 | IOSTANDARD  = LVTTL  | SLEW = SLOW | DRIVE  = 4;
@@ -11,7 +12,8 @@ NET BUTTON<1>  LOC = P60  | IOSTANDARD = LVTTL ;
 
 #SDRAM
 NET	SDRAM_CLK  LOC = P57  | IOSTANDARD = LVTTL;
-TIMESPEC "ts_sdram" = PERIOD SDRAM_CLK 10 ns High 50%; #100 MHz out clock
+NET "sdram_clk" TNM="sdram_clk_group";
+TIMESPEC "ts_sdram" = PERIOD "sdram_clk_group" 10 ns High 50%; #100 MHz out clock
 
 NET CS_N       LOC = P39  | IOSTANDARD = LVTTL ;
 NET CKE        LOC = P40  | IOSTANDARD = LVTTL ;
@@ -108,14 +110,19 @@ NET SPI_CS     LOC = P38  | IOSTANDARD = LVTTL | SLEW = SLOW | DRIVE = 4;
 
 #FPGA Controls
 NET RST        LOC = P111 | IOSTANDARD = LVTTL ;
-NET SUSPEND_N  LOC = P112 | IOSTANDARD = LVTTL | PULLUP;
+#NET SUSPEND_N  LOC = P112 | IOSTANDARD = LVTTL | PULLUP;
 
 #FTDI
+NET FTDI_CLK   LOC = P123 | IOSTANDARD = LVTTL ;
+NET "io/ftdi_clk"      TNM = "DLY_FTDI_CLK";
+TIMESPEC "TS_FTDI_CLK" = PERIOD "DLY_FTDI_CLK" 16.666 ns;
+OFFSET = IN 7.5 ns VALID 8ns BEFORE "FTDI_CLK" RISING;
+OFFSET = OUT 12 ns AFTER "FTDI_CLK" RISING;
+
 NET OE_N       LOC = P114 | IOSTANDARD = LVTTL ;
 NET RXE_N      LOC = P117 | IOSTANDARD = LVTTL ;
 NET SIWUA      LOC = P120 | IOSTANDARD = LVTTL ;
 NET WR_N       LOC = P121 | IOSTANDARD = LVTTL ;
-NET FTDI_CLK   LOC = P123 | IOSTANDARD = LVTTL ;
 NET RD_N       LOC = P124 | IOSTANDARD = LVTTL ;
 NET TXE_N      LOC = P126 | IOSTANDARD = LVTTL ;
 
@@ -129,5 +136,6 @@ NET D<5>       LOC = P116 | IOSTANDARD = LVTTL ;
 NET D<6>       LOC = P118 | IOSTANDARD = LVTTL ;
 NET D<7>       LOC = P115 | IOSTANDARD = LVTTL ;
 
-
+NET "mem1/ram/sdram_clk" TNM_NET = "tnm_internal_sdram";
+TIMESPEC TS_timing_group = FROM "tnm_main_clk_group" TO "sdram_clk_group" TIG ;
 
