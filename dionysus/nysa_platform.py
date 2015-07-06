@@ -56,18 +56,22 @@ class DionysusPlatform(Platform):
         return "Dionysus"
 
     def scan(self):
-        #print ("Scanning...")
         if self.status: self.status.Verbose("Scanning")
-        devices = usb.core.find(find_all = True)
-        for device in devices:
-            if device.idVendor == self.vendor and device.idProduct == self.product:
-                #sernum = usb.util.get_string(device, 64, device.iSerialNumber)
-                #print "Found a Dionysus Device: Serial Number: %s" % sernum
+        try:
+            devices = usb.core.find(find_all = True)
+            for device in devices:
+                if device.idVendor == self.vendor and device.idProduct == self.product:
+                    serial_num = usb.util.get_string(device, 64, device.iSerialNumber)
+                    if self.status: self.status.Verbose("Found Dionysus Device with SN: %s" % serial_num)
+                    self.add_device_dict(device.serial_number, Dionysus(idVendor = self.vendor,
+                                                          idProduct = self.product,
+                                                          sernum = device.serial_number,
+                                                          status = self.status))
+        except ValueError:
+            return {}
+        except usb.core.USBError:
+            return {}
 
-                self.add_device_dict(device.serial_number, Dionysus(idVendor = self.vendor, 
-                                                      idProduct = self.product,
-                                                      sernum = device.serial_number,
-                                                      status = self.status))
         return self.dev_dict
 
     def test_build_tools(self):
