@@ -34,7 +34,8 @@ from nysa.host.nysa_platform import SYSTEM_DIST
 
 import usb.core
 import usb.util
-from ftdi import Ftdi
+import usb.backend.libusb1
+import platform
 
 sys.path.append(os.path.join(os.path.dirname(__file__),
                              os.pardir,
@@ -58,7 +59,26 @@ class DionysusPlatform(Platform):
     def scan(self):
         if self.status: self.status.Verbose("Scanning")
         try:
-            devices = usb.core.find(find_all = True)
+            devices = {}
+            if os.name == "nt":
+                '''
+                filepath = os.path.dirname(__file__)
+
+                backend_lib = os.path.join(filepath, "board", "x86", "libusb-1.0.dll")
+                if platform.machine().endswith('64'):
+                    backend_lib = os.path.join(filepath, "board", "amd64", "libusb-1.0.dll")
+
+                '''
+                #print "Library Path: %s" % backend_lib
+                #print "Path exists: %s" % str(os.path.exists(backend_lib))
+                #backend = usb.backend.libusb1.get_backend(find_library = backend_lib)
+                #print "backend: %s" % str(backend)
+                #devices = usb.core.find(idVendor=self.vendor, idProduct=self.product, backend = backend)
+                devices = usb.core.find(find_all = True)
+                #devices = usb.core.find(idVendor=self.vendor, idProduct=self.product)
+                print "devices: %s" % str(devices)
+            else:
+                devices = usb.core.find(find_all = True)
             for device in devices:
                 if device.idVendor == self.vendor and device.idProduct == self.product:
                     serial_num = usb.util.get_string(device, 64, device.iSerialNumber)
@@ -67,9 +87,13 @@ class DionysusPlatform(Platform):
                                                           idProduct = self.product,
                                                           sernum = device.serial_number,
                                                           status = self.status))
-        except ValueError:
+        except ValueError as e:
+            print "%s" % str(e)
+            if self.status: self.status.Error("USB Backend Error: %s" % str(e))
             return {}
-        except usb.core.USBError:
+        except usb.core.USBError as e:
+            print "%s" % str(e)
+            if self.status: self.status.Error("USB Backend Error: %s" % str(e))
             return {}
 
         return self.dev_dict
