@@ -79,6 +79,8 @@ class DionysusPlatform(Platform):
                 print "devices: %s" % str(devices)
             else:
                 devices = usb.core.find(find_all = True)
+
+            #Go through all the devices and only add Dionysus Specific ones
             for device in devices:
                 if device.idVendor == self.vendor and device.idProduct == self.product:
                     serial_num = usb.util.get_string(device, 64, device.iSerialNumber)
