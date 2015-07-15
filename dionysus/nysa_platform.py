@@ -76,19 +76,16 @@ class DionysusPlatform(Platform):
                 #devices = usb.core.find(idVendor=self.vendor, idProduct=self.product, backend = backend)
                 devices = usb.core.find(find_all = True)
                 #devices = usb.core.find(idVendor=self.vendor, idProduct=self.product)
-                print "devices: %s" % str(devices)
             else:
-                devices = usb.core.find(find_all = True)
+                 devices = usb.core.find(find_all = True, idVendor = self.vendor, idProduct = self.product)
 
-            #Go through all the devices and only add Dionysus Specific ones
             for device in devices:
                 if device.idVendor == self.vendor and device.idProduct == self.product:
-                    serial_num = usb.util.get_string(device, 64, device.iSerialNumber)
-                    if self.status: self.status.Verbose("Found Dionysus Device with SN: %s" % serial_num)
                     self.add_device_dict(device.serial_number, Dionysus(idVendor = self.vendor,
                                                           idProduct = self.product,
                                                           sernum = device.serial_number,
                                                           status = self.status))
+
         except ValueError as e:
             print "%s" % str(e)
             if self.status: self.status.Error("USB Backend Error: %s" % str(e))
@@ -96,6 +93,7 @@ class DionysusPlatform(Platform):
         except usb.core.USBError as e:
             print "%s" % str(e)
             if self.status: self.status.Error("USB Backend Error: %s" % str(e))
+            print "devices: %s" % str(devices)
             return {}
 
         return self.dev_dict
