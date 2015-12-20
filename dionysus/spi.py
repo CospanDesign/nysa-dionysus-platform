@@ -68,7 +68,6 @@ class SpiPort(object):
         """Return the current SPI bus block"""
         return self._frequency
 
-
 class SpiController(object):
     """SPI master.
 
