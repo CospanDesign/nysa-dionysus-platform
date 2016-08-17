@@ -5,35 +5,35 @@
     "INTERFACE":{
         "filename":"ft245_host_interface.v",
         "bind":{
-            "ftdi_clk":{
+            "i_ft245_clk":{
                 "loc":"ftdi_clk",
                 "direction":"input"
             },
-            "ftdi_data[7:0]":{
+            "io_ft245_data[7:0]":{
                 "loc":"d[7:0]",
                 "direction":"inout"
             },
-            "ftdi_txe_n":{
+            "i_ft245_txe_n":{
                 "loc":"txe_n",
                 "direction":"input"
             },
-            "ftdi_wr_n":{
+            "o_ft245_wr_n":{
                 "loc":"wr_n",
                 "direction":"output"
             },
-            "ftdi_rde_n":{
+            "i_ft245_rde_n":{
                 "loc":"rxe_n",
                 "direction":"input"
             },
-            "ftdi_rd_n":{
+            "o_ft245_rd_n":{
                 "loc":"rd_n",
                 "direction":"output"
             },
-            "ftdi_oe_n":{
+            "o_ft245_oe_n":{
                 "loc":"oe_n",
                 "direction":"output"
             },
-            "ftdi_siwu":{
+            "o_ft245_siwu":{
                 "loc":"siwua",
                 "direction":"output"
             }
@@ -116,7 +116,7 @@
             "direction":"input",
             "loc":"rst"
         }
-    }
+    },
    "constraint_files":[
-    ]
+   ]
 }

@@ -38,6 +38,7 @@ import Queue
 import threading
 import time
 import gc
+import atexit
 from array import array as Array
 
 from threading import current_thread
@@ -59,33 +60,54 @@ from bitbang.bitbang import BitBangController
 import dionysus_utils
 
 
-DIONYSUS_QUEUE_TIMEOUT = 7
-DIONYSUS_PING_TIMEOUT = 0.1
-DIONYSUS_WRITE_TIMEOUT = 5
-DIONYSUS_READ_TIMEOUT = 3
+COMMAND_PING                = 0x0000
+COMMAND_WRITE               = 0x0001
+COMMAND_READ                = 0x0002
+COMMAND_RESET               = 0x0003
+COMMAND_MASTER_CFG_WRITE    = 0x0004
+COMMAND_MASTER_CFG_READ     = 0x0005
 
-INTERRUPT_COUNT = 32
+FLAG_MEM_BUS                = 0x00010000
+FLAG_DISABLE_AUTO_INC       = 0x00020000
 
-MAX_WRITE_QUEUE_SIZE = 10
-MAX_READ_QUEUE_SIZE = 10
+
+
+DIONYSUS_QUEUE_TIMEOUT      = 7
+DIONYSUS_PING_TIMEOUT       = 0.1
+DIONYSUS_WRITE_TIMEOUT      = 5
+DIONYSUS_READ_TIMEOUT       = 3
+                            
+INTERRUPT_COUNT             = 32
+                            
+MAX_WRITE_QUEUE_SIZE        = 10
+MAX_READ_QUEUE_SIZE         = 10
 
 #50 mS sleep between interrupt checks
-INTERRUPT_SLEEP = 0.050
+INTERRUPT_SLEEP             = 0.050
 #INTERRUPT_SLEEP = 1
 
-DIONYSUS_RESET = 1
-DIONYSUS_WRITE = 2
-DIONYSUS_READ = 3
-DIONYSUS_PING = 4
-DIONYSUS_DUMP_CORE = 5
-DIONYSUS_IS_PROGRAMMED = 6
-
-DIONYSUS_RESP_OK = 0
-DIONYSUS_RESP_ERR = -1
-
-DIONYSUS_MEMORY_OFFSET = 0x0100000000
+DIONYSUS_RESET              = 1
+DIONYSUS_WRITE              = 2
+DIONYSUS_READ               = 3
+DIONYSUS_PING               = 4
+DIONYSUS_DUMP_CORE          = 5
+DIONYSUS_IS_PROGRAMMED      = 6
+                            
+DIONYSUS_RESP_OK            = 0
+DIONYSUS_RESP_ERR           = -1
 
 _dionysus_instances = {}
+
+def create_byte_array_from_dword(dword):
+    d = Array('B')
+    d.append((dword >> 24) & 0xFF)
+    d.append((dword >> 16) & 0xFF)
+    d.append((dword >>  8) & 0xFF)
+    d.append((dword >>  0) & 0xFF)
+    return d
+
+def create_32bit_word(data_array, index = 0):
+    return (data_array[index] << 24) | (data_array[index + 1] << 16) | (data_array[index + 2] << 8) | (data_array[index + 3])
 
 def Dionysus(idVendor = 0x0403, idProduct = 0x8530, sernum = None, status = False):
     global _dionysus_instances
@@ -94,25 +116,15 @@ def Dionysus(idVendor = 0x0403, idProduct = 0x8530, sernum = None, status = Fals
     _dionysus_instances[sernum] = _Dionysus(idVendor, idProduct, sernum, status)
     return _dionysus_instances[sernum]
 
-class DionysusData(object):
-    data = None
-    length = 0
-
 class WorkerThread(threading.Thread):
 
-    def __init__(   self,
-                    dev,
-                    host_write_queue,
-                    host_read_queue,
-                    dionysus_data,
-                    lock,
-                    interrupt_update_callback):
+    def __init__(self,
+                 dev,
+                 lock,
+                 interrupt_update_callback):
         super(WorkerThread, self).__init__()
         self.dev = dev
-        self.hwq = host_write_queue
-        self.hrq = host_read_queue
         self.iuc = interrupt_update_callback
-        self.d = dionysus_data
         self.lock = lock
         self.interrupts = 0
 
@@ -120,333 +132,39 @@ class WorkerThread(threading.Thread):
         for i in range(INTERRUPT_COUNT):
             self.interrupts_cb.append([])
 
-    def last_ref(self):
-        #Put an empty signal in the queue to signify that this is the last
-        #reference
-        self.hwq.put(None)
+        self.finished = False
+        atexit.register(self.kill_thread)
+
+    def kill_thread(self):
+        self.finished = True
 
     def run(self):
-        wdata = None
-        rdata = None
-        while (1):
-            try:
-                try:
-                    wdata = self.hwq.get(block = True, timeout = INTERRUPT_SLEEP)
-
-                except Queue.Empty:
-                    #Timeout has occured, read and process interrupts
-                    self.check_interrupt()
-                    continue
-
-                #Check for finish condition
-                if wdata is None:
-                    #if write data is None then we are done
-                    return
-
-                if wdata == DIONYSUS_RESET:
-                    self.reset()
-                elif wdata == DIONYSUS_IS_PROGRAMMED:
-                    self.is_programmed()
-                elif wdata == DIONYSUS_PING:
-                    self.ping()
-                elif wdata == DIONYSUS_WRITE:
-                    self.write()
-                elif wdata == DIONYSUS_READ:
-                    self.read()
-                elif wdata == DIONYSUS_DUMP_CORE:
-                    self.dump_core()
-                else:
-                    print "Unrecognized command from write queue: %d" % wdata
-                    pass
-
-            except AttributeError:
-                print "closing dionysus worker thread"
-                #If the queue is none then it was destroyed by the main thread
-                #we are done then
-                return
-
-    def reset(self):
-        vendor = self.d.data[0]
-        product = self.d.data[1]
-        bbc = BitBangController(vendor, product, 2)
-        bbc.set_soft_reset_to_output()
-        bbc.soft_reset_high()
-        time.sleep(.2)
-        bbc.soft_reset_low()
-        time.sleep(.2)
-        bbc.soft_reset_high()
-        bbc.pins_on()
-        bbc.set_pins_to_input()
-        self.hrq.put(DIONYSUS_RESP_OK)
-
-    def is_programmed(self):
-        vendor = self.d.data[0]
-        product = self.d.data[1]
-        bbc = BitBangController(vendor, product, 2)
-        self.d.data = bbc.read_done_pin()
-        bbc.pins_on()
-        bbc.set_pins_to_input()
-        self.hrq.put(DIONYSUS_RESP_OK)
-
-    def write(self):
-        #print "Writing: %s" % str(self.d.data)
-        self.dev.purge_buffers()
-        self.dev.write_data(self.d.data)
-
-        rsp = Array ('B')
-        rsp = self.dev.read_data_bytes(1)
-
-        if len(rsp) > 0 and rsp[0] == 0xDC:
-            #Got a response
-            pass
-        else:
-            timeout = time.time() + DIONYSUS_WRITE_TIMEOUT
-            while time.time() < timeout:
-                rsp = self.dev.read_data_bytes(1)
-                if len(rsp) > 0 and rsp[0] == 0xDC:
-                    #Got a response
-                    break
-
-        if len(rsp) > 0:
-            if rsp[0] != 0xDC:
-                #Response ID Not found!
-                self.hrq.put(DIONYSUS_RESP_ERR)
-                return
-
-        else:
-            #Timed out waiting for response
-            self.hrq.put(DIONYSUS_RESP_ERR)
-            return
-
-        #Got ID byte now look for the rest of the data
-        read_count = 0
-        rsp = self.dev.read_data_bytes(12)
-        timeout = time.time() + DIONYSUS_WRITE_TIMEOUT
-        read_count = len(rsp)
-
-        while (time.time() < timeout) and (read_count < 12):
-            rsp += self.dev.read_data_bytes(12 - read_count)
-            read_count = len(rsp)
-
-        self.hrq.put(DIONYSUS_RESP_OK)
-
-    def read(self):
-        length = self.d.length
-        self.dev.purge_buffers()
-        dout = self.d.data
-
-        self.dev.write_data(self.d.data)
-
-        rsp = Array ('B')
-        rsp = self.dev.read_data_bytes(2)
-        if len(rsp) > 1 and rsp[0] == 0xDC and rsp[1] == 0xFD:
-            #Got a response
-            pass
-        else:
-            timeout = time.time() + DIONYSUS_READ_TIMEOUT
-            while time.time() < timeout:
-                rsp = self.dev.read_data_bytes(1)
-                if len(rsp) > 0 and rsp[0] == 0xDC:
-                    #Got an ack
-                    break
-
-        if len(rsp) > 0:
-            if rsp[0] != 0xDC:
-                #Didn't get a response
-                self.hrq.put(DIONYSUS_RESP_ERR)
-                return
-
-        else:
-            #Timeout while waiting for a response
-            self.hrq.put(DIONYSUS_RESP_ERR)
-            return
-
-        #Finished
-        #Watch out for the modem status bytes
-        rsp = rsp[1:]
-        read_count = len(rsp)
-        timeout = time.time() + DIONYSUS_READ_TIMEOUT
-
-        total_length = length * 4 + 8
-        rsp += self.dev.read_data_bytes(total_length - read_count)
-        read_count = len(rsp)
-
-        while (time.time() < timeout) and (read_count < total_length):
-            rsp += self.dev.read_data_bytes(total_length - read_count)
-            read_count = len(rsp)
-
-        '''
-        print "DEBUG READ:"
-        if (time.time() > timeout):
-            self.d.Error("\tTimeout condition occured!")
-        print "Time left on timeout: %d" % (timeout - time.time())
-
-        print "\tResponse Length: %d" % len(rsp)
-        print "\tResponse Status: %s" % str(rsp[:8])
-        print "\tResponse Dev ID: %d Addr: 0x%06X" % (rsp[4], (rsp[5] << 16 | rsp[6] << 8 | rsp[7]))
-        if len(rsp[8:]) > 32:
-            #print "\tResponse Data:\n\t%s" % str(rsp[8:40])
-            print "\tResponse Data:\n\t%s" % str(rsp[:40])
-        else:
-            print "\tResponse Data:\n\t%s" % str(rsp)
-        '''
-        self.d.data = rsp[8:]
-        self.hrq.put(DIONYSUS_RESP_OK)
-
-    def ping(self):
-        data = Array('B')
-        data.extend([0xCD, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-        #if self.s:
-        #    self.s.Debug( "Sending ping...",)
-
-
-        self.dev.write_data(data)
-
-        #Set up a response
-        rsp = Array('B')
-        temp = Array('B')
-
-        timeout = time.time() + DIONYSUS_PING_TIMEOUT
-
-        while time.time() < timeout:
-            rsp = self.dev.read_data_bytes(5)
-            temp.extend(rsp)
-            if 0xDC in rsp:
-                #if self.s:
-                #    self.s.Debug( "Response to Ping")
-                #    self.s.Debug( "Resposne: %s" % str(temp))
-                break
-
-        if not 0xDC in rsp:
-            #if self.s:
-            #    self.s.Debug( "ID byte not found in response")
-            #raise NysaCommError("Ping response did not contain ID: %s" % str(temp))
-            self.hrq.put(DIONYSUS_RESP_ERR)
-            return
-
-        index = rsp.index (0xDC) + 1
-        read_data = Array('B')
-        read_data.extend(rsp[index:])
-
-        num = 3 - index
-        read_data.extend(self.dev.read_data_bytes(num))
-
-        #if self.s:
-        #    self.s.Debug( "Success")
-
-        self.hrq.put(DIONYSUS_RESP_OK)
-
-    def dump_core(self):
-        data = Array ('B')
-        data.extend([0xCD, 0x0F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-        #if self.s:
-        #    self.s.Debug( "Sending core dump request...")
-
-        self.dev.purge_buffers()
-        self.dev.write_data(data)
-
-        core_dump = Array('L')
-        wait_time = 5
-        timeout = time.time() + wait_time
-
-        temp = Array ('B')
-        while time.time() < timeout:
-            rsp = self.dev.read_data_bytes(1)
-            temp.extend(rsp)
-            if 0xDC in rsp:
-                #self.s.Debug( "Read a response from the core dump")
-                break
-
-        if not 0xDC in rsp:
-            #if self.s:
-            #    self.s.Debug( "Response not found!")
-            raise NysaCommError("Response Not Found")
-
-        rsp = Array ('B')
-        read_total = 4
-        read_count = len(rsp)
-
-        #Get the number of items from the incomming data, This size is set by the
-        #Wishbone Master
-        timeout = time.time() + wait_time
-        while (time.time() < timeout) and (read_count < read_total):
-            rsp += self.dev.read_data_bytes(read_total - read_count)
-            read_count = len(rsp)
-
-
-        count = (rsp[1] << 16 | rsp[2] << 8 | rsp[3]) * 4
-        '''
-        if self.s:
-            self.s.Debug( "Length of read:%d" % len(rsp))
-            self.s.Debug( "Data: %s" % str(rsp))
-            self.s.Debug( "Number of core registers: %d" % (count / 4))
-        '''
-
-        timeout = time.time() + wait_time
-        read_total = count
-        read_count = 0
-        temp = Array ('B')
-        rsp = Array('B')
-        while (time.time() < timeout) and (read_count < read_total):
-            rsp += self.dev.read_data_bytes(read_total - read_count)
-            read_count = len(rsp)
-
-        #if self.s:
-        #    self.s.Debug( "Length read: %d" % (len(rsp) / 4))
-        #    self.s.Debug( "Data: %s" % str(rsp))
-
-        core_data = Array('L')
-        '''
-        for i in range(0, count, 4):
-            if self.s:
-                self.s.Debug( "Count: %d" % i)
-                core_data.append(rsp[i] << 24 | rsp[i + 1] << 16 | rsp[i + 2] << 8 | rsp[i + 3])
-
-
-        if self.s:
-            self.s.Debug( "Core Data: %s" % str(core_data))
-        '''
-
-        self.d.data = core_data
-        self.hrq.put(DIONYSUS_RESP_OK)
+        while (not self.finished):
+            time.sleep(INTERRUPT_SLEEP)
+            '''
+            if self.lock.acquire(False):
+                self.check_interrupt()
+                self.lock.release()
+            '''
 
     def check_interrupt(self):
         self.interrupts = 0
         data = None
-        if not self.lock.acquire(False):
-            #Could not aquire lock, return
-            return
-
         try:
-            data = self.dev.read_data_bytes(2)
-            if len(data) == 0 or data[0] != 0xDC:
+            data = self.dev.read_data_bytes(4, attempt=0)
+            if len(data) == 0:
                 return
-
-            data += self.dev.read_data_bytes(11)
-
-            #self.s.Verbose("data: %s" % str(data))
-
-            if len(data) != 13:
-                print "data length is not 13!: %s" % str(data)
-
-            self.interrupts =   (data[9]  << 24 |
-                                data[10] << 16 |
-                                data[11] << 8  |
-                                data[12])
-
+            self.interrupts = create_32bit_word(data)
             if self.interrupts > 0:
                 self.process_interrupts(self.interrupts)
                 self.iuc(self.interrupts)
-                #print "Interrupt finished"
 
         except TypeError as ex:
             print "Type Error: %s" % str(ex)
+        except IndexError:
+            return
         except:
             print "Error while reading interrupts: %s" % sys.exc_info()[0]
-            #print "Exception when reading interrupts"
-
-        finally:
-            self.lock.release()
 
     def process_interrupts(self, interrupts):
         for i in range(INTERRUPT_COUNT):
@@ -454,17 +172,11 @@ class WorkerThread(threading.Thread):
                 continue
             if len(self.interrupts_cb[i]) == 0:
                 continue
-            #Call all callbacks
-            #self.s.Debug( "Calling callback for: %d" % i)
             for cb in self.interrupts_cb[i]:
                 try:
-                    #print "callback %s" % str(cb)
                     cb()
                 except TypeError:
-                    #If an error occured when calling a callback removed if from
-                    #our list
                     self.interrupts_cb.remove(cb)
-                    #self.s.Debug( "Error need to remove callback")
 
     def register_interrupt_cb(self, index, cb):
         if index > INTERRUPT_COUNT - 1:
@@ -482,6 +194,7 @@ class WorkerThread(threading.Thread):
             interrupt_list.remove(cb)
 
 class _Dionysus (Nysa):
+
     """
     Dionysus
 
@@ -499,7 +212,6 @@ class _Dionysus (Nysa):
         gc.collect()
         self.lock = threading.Lock()
 
-
         self.dev = Ftdi()
         self._open_dev()
         self.name = "Dionysus"
@@ -510,15 +222,7 @@ class _Dionysus (Nysa):
             e.set()
             self.events.append(e)
 
-        self.hwq = Queue.Queue(10)
-        self.hrq = Queue.Queue(10)
-
-        self.d = DionysusData()
-
         self.worker = WorkerThread(self.dev,
-                                   self.hwq,
-                                   self.hrq,
-                                   self.d,
                                    self.lock,
                                    self.interrupt_update_callback)
         #Is there a way to indicate closing
@@ -534,30 +238,6 @@ class _Dionysus (Nysa):
             pass
 
         self.reset()
-
-
-
-        '''
-        #status = True
-        self.reader_thread = ReaderThread(self.dev, self.interrupt_update_callback, self.lock, status = status)
-        self.reader_thread.setName("Reader Thread")
-        #XXX: Need to find a better way to shut this down
-        self.reader_thread.setDaemon(True)
-        self.reader_thread.start()
-        '''
-
-    def __del__(self):
-        #if self.s: self.s.Debug( "Close reader thread")
-        #self.lock.aquire()
-        #if (self.reader_thread is not None) and self.reader_thread.isAlive():
-        #    self.reader_thread.stop()
-        #    self.s.Debug( "Waiting to join")
-        #    self.reader_thread.join()
-        #self.lock.release()
-        #self.s = True
-        #if self.s: self.s.Debug( "Reader thread joined")
-        #self.dev.close()
-        pass
 
     def _open_dev(self):
         """_open_dev
@@ -601,17 +281,6 @@ class _Dionysus (Nysa):
         #Enable MPSSE Mode
         self.dev.set_bitmode(0x00, Ftdi.BITMODE_SYNCFF)
 
-    def ipc_comm_response(self, name):
-        try:
-            resp = self.hrq.get(block = True, timeout = DIONYSUS_QUEUE_TIMEOUT)
-            if resp == DIONYSUS_RESP_OK:
-                #print "%s got an OK response!" % current_thread().name
-                return self.d.data
-            else:
-                raise NysaCommError("Dionysus response error %s: %d" % (name, resp))
-        except Queue.Empty:
-            raise NysaCommError("Dionysus error %s: timeout: %d" % (name, DIONYSUS_QUEUE_TIMEOUT))
-
     def read(self, address, length = 1, disable_auto_inc = False):
         """read
 
@@ -619,13 +288,13 @@ class _Dionysus (Nysa):
 
         Command Format
 
-        ID 02 NN NN NN OO AA AA AA
-           ID: ID Byte (0xCD)
-           02: Read Command (12 for memory read)
-           NN: Size of Read (3 Bytes)
-           OO: Offset (for peripheral, part of address for mem)
-           AA: Address (3 bytes for peripheral,
-               (4 bytes including offset for mem)
+        FF FF CC CC NN NN NN NN AA AA AA AA
+        00 0? 00 02
+
+            FF: Flags               (16-bits) 0x000?
+            CC: Commands            (16-bits) 0x0002
+            NN: Size of Writes      (32-bits) Number of 32-bit values
+            AA: Address             (32-bits) 32-bit Address
 
         Args:
             address (long): Address of the register/memory to read
@@ -641,23 +310,30 @@ class _Dionysus (Nysa):
             NysaCommError
         """
         with self.lock:
-            self.d.data = Array('B', [0xCD, 0x02])
-            if address >= DIONYSUS_MEMORY_OFFSET:
-                address -= DIONYSUS_MEMORY_OFFSET
-                self.d.data[1] = self.d.data[1] | 0x10
+
+            if self.mem_addr is None:
+                self.mem_addr = self.nsm.get_address_of_memory_bus()
+
+            command = COMMAND_READ
+
+            if address >= self.mem_addr:
+                address = address - self.mem_addr
+                command |= FLAG_MEM_BUS
 
             if disable_auto_inc:
-                self.d.data[1] = self.d.data[1] | 0x20
+                command |= FLAG_DISABLE_AUTO_INC
 
-            fmt_string = "%06X" % length
-            self.d.data.fromstring(fmt_string.decode('hex'))
+            write_data.extend(create_byte_array_from_dword(command))
+            write_data.extend(create_byte_array_from_dword(length))
+            write_data.extend(create_byte_array_from_dword(address))
+            write_data.extend(data)
 
-            #Add the address
-            addr_string = "%08X" % (address & 0xFFFFFFFF)
-            self.d.data.fromstring(addr_string.decode('hex'))
-            self.d.length = length
-            self.hwq.put(DIONYSUS_READ)
-            return self.ipc_comm_response("read")
+            if data_count == 0:
+                raise NysaCommError("Length of data to write is 0!")
+
+            self.dev.write_data(write_data)
+            read_data = self.dev.read_data_bytes(length * 4)
+            return read_data
 
     def write(self, address, data, disable_auto_inc = False):
         """write
@@ -666,17 +342,17 @@ class _Dionysus (Nysa):
 
         Command Format
 
-        ID 01 NN NN NN OO AA AA AA DD DD DD DD
-           ID: ID Byte (0xCD)
-           01: Write Command (11 for Memory Write)
-           NN: Size of Write (3 Bytes)
-           OO: Offset (for peripheral, part of address for mem)
-           AA: Address (3 bytes for peripheral,
-             #(4 bytes including offset for mem)
-           DD: Data (4 bytes)
+        FF FF CC CC NN NN NN NN AA AA AA AA DD DD DD DD ...
+        00 0? 00 01
+
+            FF: Flags               (16-bits)
+            CC: Commands            (16-bits)
+            NN: Size of Writes      (32-bits) Number of 32-bit values
+            AA: Address             (32-bits) 32-bit Address
+            DD: Data                (23-bits X Number of 32-bit values)
 
         Args:
-            address (long): Address of the register/memory to write to
+            address (32-bit): Address of the register/memory to write to
             memory_device (boolean):
                 True: Memory device
                 False: Peripheral device
@@ -689,34 +365,45 @@ class _Dionysus (Nysa):
         Raises:
             NysaCommError
         """
-        with self.lock:
-            length = len(data) / 4
-            #Create an Array with the identification byte and code for writing
-            self.d.data = Array ('B', [0xCD, 0x01])
-            if address >= DIONYSUS_MEMORY_OFFSET:
-                address -= DIONYSUS_MEMORY_OFFSET
-                self.d.data[1] = self.d.data[1] | 0x10
-            if disable_auto_inc:
-                self.d.data[1] = self.d.data[1] | 0x20
 
-            #Append the length into the first 24 bits
-            fmt_string = "%06X" % length
-            self.d.data.fromstring(fmt_string.decode('hex'))
-            addr_string = "%08X" % (address & 0xFFFFFFFF)
-            self.d.data.fromstring(addr_string.decode('hex'))
-            self.d.data.extend(data)
-            self.hwq.put(DIONYSUS_WRITE)
-            self.ipc_comm_response("write")
+        with self.lock:
+
+            write_data = Array('B')
+            if self.mem_addr is None:
+                self.mem_addr = self.nsm.get_address_of_memory_bus()
+
+            command = COMMAND_WRITE
+
+            if address >= self.mem_addr:
+                address = address - self.mem_addr
+                command |= FLAG_MEM_BUS
+
+            if disable_auto_inc:
+                command |= FLAG_DISABLE_AUTO_INC
+
+            write_data.extend(create_byte_array_from_dword(command))
+
+            while (len(data) % 4) != 0:
+                data.append(0)
+
+            data_count = len(data) / 4
+
+            write_data.extend(create_byte_array_from_dword(data_count))
+            write_data.extend(create_byte_array_from_dword(address))
+            write_data.extend(data)
+
+            if data_count == 0:
+                raise NysaCommError("Length of data to write is 0!")
+
+            self.dev.write_data(write_data)
 
     def ping (self):
         """ping
 
         Command Format
 
-        ID 00 00 00 00 00 00 00 00
-            ID: ID Byte (0xCD)
-            00: Ping Command
-            00 00 00 00 00 00 00: Zeros
+        FF FF CC CC
+        00 00 00 00
 
         Args:
             Nothing
@@ -727,9 +414,8 @@ class _Dionysus (Nysa):
         Raises:
             NysaCommError
         """
-        with self.lock:
-            self.hwq.put(DIONYSUS_PING)
-            self.ipc_comm_response("ping")
+        self.dev.write_data(Array('B', create_byte_array_from_dword(COMMAND_PING)))
+        read_data = self.dev.read_data_bytes(1)
 
     def reset (self):
         """ reset
@@ -737,10 +423,8 @@ class _Dionysus (Nysa):
         Software reset the Nysa FPGA Master, this may not actually reset the entire
         FPGA image
 
-        ID 03 00 00 00
-            ID: ID Byte (0xCD)
-            00: Reset Command
-            00 00 00: Zeros
+        FF FF CC CC
+        00 00 00 03
 
         Args:
             Nothing
@@ -752,9 +436,15 @@ class _Dionysus (Nysa):
             NysaCommError: Failue in communication
         """
         with self.lock:
-            self.d.data = (self.vendor, self.product)
-            self.hwq.put(DIONYSUS_RESET)
-            self.ipc_comm_response("reset")
+            bbc = BitBangController(self.vendor, self.product, 2)
+            bbc.set_soft_reset_to_output()
+            bbc.soft_reset_high()
+            time.sleep(.2)
+            bbc.soft_reset_low()
+            time.sleep(.2)
+            bbc.soft_reset_high()
+            bbc.pins_on()
+            bbc.set_pins_to_input()
 
     def is_programmed(self):
         """
@@ -770,10 +460,13 @@ class _Dionysus (Nysa):
         Raises:
             NysaCommError: Failue in communication
         """
+
         with self.lock:
-            self.d.data = (self.vendor, self.product)
-            self.hwq.put(DIONYSUS_IS_PROGRAMMED)
-            return self.ipc_comm_response("is programmed")
+            bbc = BitBangController(self.vendor, self.product, 2)
+            done = bbc.read_done_pin()
+            bbc.pins_on()
+            bbc.set_pins_to_input()
+            return done
 
     def dump_core(self):
         """ dump_core
@@ -783,10 +476,7 @@ class _Dionysus (Nysa):
 
         Command Format
 
-        ID 0F 00 00 00 00 00 00 00
-            ID: ID Byte (0xCD)
-            0F: Dump Core Command
-            00 00 00 00 00 00 00 00 00 00 00: Zeros
+        XX XX XX XX
 
         Args:
             Nothing
@@ -797,9 +487,7 @@ class _Dionysus (Nysa):
         Raises:
             NysaCommError: A failure in communication is detected
         """
-        with self.lock:
-            self.hwq.put(DIONYSUS_DUMP_CORE)
-            return self.ipc_comm_response("dump core")
+        raise AssertionError("%s not implemented" % sys._getframe().f_code.co_name)
 
     def register_interrupt_callback(self, index, callback):
         """ register_interrupt
@@ -846,11 +534,9 @@ class _Dionysus (Nysa):
         needs to send information to the host
 
         Response Format
-        DC 01 00 00 00 II II II II
-            DC: Inverted CD is the start of a response
-            01: Interrupt ID
-            00 00 00 00 00 00 00 00: Zeros, reserved for future use
-            II II II II: 32-bit interrupts
+        II II II II
+
+        I: 32-bit interrupts bits, if bit 0 is set then slave 0 has an interrupt
 
 
         Args:

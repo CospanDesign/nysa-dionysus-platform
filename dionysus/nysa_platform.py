@@ -34,7 +34,7 @@ from nysa.host.nysa_platform import SYSTEM_DIST
 
 import usb.core
 import usb.util
-import usb.backend.libusb1
+#import usb.backend.usb1
 import platform
 
 sys.path.append(os.path.join(os.path.dirname(__file__),
@@ -43,7 +43,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__),
 
 
 import nysa
-from nysa.ibuilder.lib.xilinx_utils import find_xilinx_path
+from nysa.ibuilder.xilinx_utils import find_xilinx_path
 from dionysus import Dionysus
 
 class DionysusPlatform(Platform):
