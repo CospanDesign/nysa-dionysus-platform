@@ -141,11 +141,9 @@ class WorkerThread(threading.Thread):
     def run(self):
         while (not self.finished):
             time.sleep(INTERRUPT_SLEEP)
-            '''
             if self.lock.acquire(False):
                 self.check_interrupt()
                 self.lock.release()
-            '''
 
     def check_interrupt(self):
         self.interrupts = 0
@@ -222,6 +220,7 @@ class _Dionysus (Nysa):
             e.set()
             self.events.append(e)
 
+
         self.worker = WorkerThread(self.dev,
                                    self.lock,
                                    self.interrupt_update_callback)
@@ -233,11 +232,13 @@ class _Dionysus (Nysa):
             #XXX: Hack to fix a strange bug where FTDI
             #XXX: won't recognize Dionysus until a read and reset occurs
             self.ping()
+            pass
 
         except NysaCommError:
             pass
 
-        self.reset()
+        #self.reset()
+        self.sdb_read = False
 
     def _open_dev(self):
         """_open_dev
@@ -266,9 +267,10 @@ class _Dionysus (Nysa):
 
         #Reset
         #Configure Clock
+        #XXX: Should this be chanced to 30MHz??
         #frequency = self.dev._set_frequency(frequency)
 
-        #Set Latency Timer
+        #Set Latency Timer (XXX) This might be set by default
         self.dev.set_latency_timer(latency)
 
         #Set Chunk Size (Maximum Chunk size)
@@ -280,6 +282,22 @@ class _Dionysus (Nysa):
         self.dev.purge_buffers()
         #Enable MPSSE Mode
         self.dev.set_bitmode(0x00, Ftdi.BITMODE_SYNCFF)
+
+    def sdb_read_callback(self):
+        """sdb_read_callback
+        
+        Callback is called when SDB has been read and parsed
+
+        Args:
+            Nothing
+
+        Returns:
+            Nothing
+
+        Raises:
+            Exception
+        """
+        self.sdb_read = True
 
     def read(self, address, length = 1, disable_auto_inc = False):
         """read
@@ -311,28 +329,36 @@ class _Dionysus (Nysa):
         """
         with self.lock:
 
-            if self.mem_addr is None:
+            if self.sdb_read:
                 self.mem_addr = self.nsm.get_address_of_memory_bus()
 
             command = COMMAND_READ
 
-            if address >= self.mem_addr:
+            if self.sdb_read and (address >= self.mem_addr):
                 address = address - self.mem_addr
                 command |= FLAG_MEM_BUS
 
             if disable_auto_inc:
                 command |= FLAG_DISABLE_AUTO_INC
 
+            write_data = Array('B')
             write_data.extend(create_byte_array_from_dword(command))
             write_data.extend(create_byte_array_from_dword(length))
             write_data.extend(create_byte_array_from_dword(address))
-            write_data.extend(data)
-
-            if data_count == 0:
-                raise NysaCommError("Length of data to write is 0!")
 
             self.dev.write_data(write_data)
-            read_data = self.dev.read_data_bytes(length * 4)
+            timeout = 2
+            start = time.time()
+            end = time.time()
+            #read_data = Array('B')
+            read_data = self.dev.read_data_bytes(length * 4, attempt = 5)
+            #while ((end - start) > timeout) or (len(read_data) < length * 4):
+            #    d = self.dev.read_data_bytes(length * 4, attempt = 4)
+            #    if len(d) > 0:
+            #        read_data.extend(d)
+            #    end = time.time()
+
+            #print "read data: %s" % str(read_data)
             return read_data
 
     def write(self, address, data, disable_auto_inc = False):
@@ -415,7 +441,7 @@ class _Dionysus (Nysa):
             NysaCommError
         """
         self.dev.write_data(Array('B', create_byte_array_from_dword(COMMAND_PING)))
-        read_data = self.dev.read_data_bytes(1)
+        read_data = self.dev.read_data_bytes(4)
 
     def reset (self):
         """ reset
