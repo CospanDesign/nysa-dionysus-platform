@@ -440,8 +440,9 @@ class _Dionysus (Nysa):
         Raises:
             NysaCommError
         """
-        self.dev.write_data(Array('B', create_byte_array_from_dword(COMMAND_PING)))
-        read_data = self.dev.read_data_bytes(4)
+        with self.lock:
+            self.dev.write_data(Array('B', create_byte_array_from_dword(COMMAND_PING)))
+            read_data = self.dev.read_data_bytes(4)
 
     def reset (self):
         """ reset
