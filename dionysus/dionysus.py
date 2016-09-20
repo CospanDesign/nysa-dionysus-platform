@@ -51,6 +51,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__),
 from nysa.host.nysa import Nysa
 from nysa.common import status
 from nysa.host.nysa import NysaCommError
+from nysa.host.nysa import NYSA_FLAGS
 
 #from pyftdi.pyftdi.ftdi import Ftdi
 from ftdi import Ftdi
@@ -69,16 +70,16 @@ COMMAND_MASTER_CFG_READ     = 0x0005
 
 FLAG_MEM_BUS                = 0x00010000
 FLAG_DISABLE_AUTO_INC       = 0x00020000
-
+FLAG_MASTER_CONFIG          = 0x00040000
 
 
 DIONYSUS_QUEUE_TIMEOUT      = 7
 DIONYSUS_PING_TIMEOUT       = 0.1
 DIONYSUS_WRITE_TIMEOUT      = 5
 DIONYSUS_READ_TIMEOUT       = 3
-                            
+
 INTERRUPT_COUNT             = 32
-                            
+
 MAX_WRITE_QUEUE_SIZE        = 10
 MAX_READ_QUEUE_SIZE         = 10
 
@@ -92,7 +93,7 @@ DIONYSUS_READ               = 3
 DIONYSUS_PING               = 4
 DIONYSUS_DUMP_CORE          = 5
 DIONYSUS_IS_PROGRAMMED      = 6
-                            
+
 DIONYSUS_RESP_OK            = 0
 DIONYSUS_RESP_ERR           = -1
 
@@ -149,6 +150,11 @@ class WorkerThread(threading.Thread):
         self.interrupts = 0
         data = None
         try:
+            '''
+            modem_status = self.dev.poll_modem_status()
+            if (modem_status & 0x80) == 0:
+                return
+            '''
             data = self.dev.read_data_bytes(4, attempt=0)
             if len(data) == 0:
                 return
@@ -228,16 +234,14 @@ class _Dionysus (Nysa):
         self.worker.setDaemon(True)
         self.worker.start()
 
+        self.reset()
         try:
-            #XXX: Hack to fix a strange bug where FTDI
-            #XXX: won't recognize Dionysus until a read and reset occurs
             self.ping()
             pass
 
         except NysaCommError:
             pass
 
-        #self.reset()
         self.sdb_read = False
 
     def _open_dev(self):
@@ -285,7 +289,7 @@ class _Dionysus (Nysa):
 
     def sdb_read_callback(self):
         """sdb_read_callback
-        
+
         Callback is called when SDB has been read and parsed
 
         Args:
@@ -297,9 +301,10 @@ class _Dionysus (Nysa):
         Raises:
             Exception
         """
+        self.mem_addr = self.nsm.get_address_of_memory_bus()
         self.sdb_read = True
 
-    def read(self, address, length = 1, disable_auto_inc = False):
+    def read(self, address, length = 1, flags = []):
         """read
 
         read data from Dionysus
@@ -317,8 +322,9 @@ class _Dionysus (Nysa):
         Args:
             address (long): Address of the register/memory to read
             length (int): Number of 32-bit words to read
-            disable_auto_inc (bool): if true, auto increment feature will be
-                disabled
+            flags (list of flags): [flag1, flag2, flag3]
+                NYSA_FLAG.DISABLE_AUTO_INC    = 0
+                NYSA_FLAG.MASTER_ADDRESS      = 1
 
         Returns:
             (Byte Array): A byte array containing the raw data returned from
@@ -327,41 +333,46 @@ class _Dionysus (Nysa):
         Raises:
             NysaCommError
         """
+
+        command = COMMAND_READ
+
+        if self.sdb_read and (address >= self.mem_addr):
+            address = address - self.mem_addr
+            command |= FLAG_MEM_BUS
+
+        if NYSA_FLAGS.DISABLE_AUTO_INC in flags:
+            command |= FLAG_DISABLE_AUTO_INC
+
+        if NYSA_FLAGS.MASTER_ADDRESS in flags:
+            command |= FLAG_MASTER_CONFIG
+
+        write_data = Array('B')
+        write_data.extend(create_byte_array_from_dword(command))
+        write_data.extend(create_byte_array_from_dword(length))
+        write_data.extend(create_byte_array_from_dword(address))
+
         with self.lock:
-
-            if self.sdb_read:
-                self.mem_addr = self.nsm.get_address_of_memory_bus()
-
-            command = COMMAND_READ
-
-            if self.sdb_read and (address >= self.mem_addr):
-                address = address - self.mem_addr
-                command |= FLAG_MEM_BUS
-
-            if disable_auto_inc:
-                command |= FLAG_DISABLE_AUTO_INC
-
-            write_data = Array('B')
-            write_data.extend(create_byte_array_from_dword(command))
-            write_data.extend(create_byte_array_from_dword(length))
-            write_data.extend(create_byte_array_from_dword(address))
-
+            self.dev.purge_buffers()
             self.dev.write_data(write_data)
-            timeout = 2
-            start = time.time()
-            end = time.time()
-            #read_data = Array('B')
-            read_data = self.dev.read_data_bytes(length * 4, attempt = 5)
-            #while ((end - start) > timeout) or (len(read_data) < length * 4):
-            #    d = self.dev.read_data_bytes(length * 4, attempt = 4)
-            #    if len(d) > 0:
-            #        read_data.extend(d)
-            #    end = time.time()
+            '''
+            read_data = Array('B')
+            count = 0
+            l = length * 4
+            modem_status = 0x00
+            while count < l:
+                modem_status = 0x00
+                while (modem_status & 0x10) == 0:
+                    modem_status = self.dev.poll_modem_status()
+                    print "modem status: 0x%04X" % modem_status
+                
+                read_data.extend(self.dev.read_data_bytes(l - count))
+                count = len(read_data)
 
-            #print "read data: %s" % str(read_data)
+            '''
+            read_data = self.dev.read_data_bytes(length * 4, attempt = 4)
             return read_data
 
-    def write(self, address, data, disable_auto_inc = False):
+    def write(self, address, data, flags = []):
         """write
 
         Write data to a Nysa image
@@ -383,44 +394,45 @@ class _Dionysus (Nysa):
                 True: Memory device
                 False: Peripheral device
             data (array of bytes): Array of raw bytes to send to the devcie
-            disable_auto_inc (boolean): Default False
-                Set to true if only writing to one memory address (FIFO Mode)
+            flags (list of flags): [flag1, flag2, flag3]
+                NYSA_FLAG.DISABLE_AUTO_INC    = 0
+                NYSA_FLAG.MASTER_ADDRESS      = 1
 
         Returns: Nothing
 
         Raises:
             NysaCommError
         """
+        write_data = Array('B')
+        command = COMMAND_WRITE
+
+        if address >= self.mem_addr:
+            address = address - self.mem_addr
+            print "Address: 0x%08X" % address
+            command |= FLAG_MEM_BUS
+
+        if NYSA_FLAGS.DISABLE_AUTO_INC in flags:
+            command |= FLAG_DISABLE_AUTO_INC
+
+        if NYSA_FLAGS.MASTER_ADDRESS in flags:
+            command |= FLAG_MASTER_CONFIG
+
+        write_data.extend(create_byte_array_from_dword(command))
+
+        while (len(data) % 4) != 0:
+            data.append(0)
+
+        data_count = len(data) / 4
+
+        write_data.extend(create_byte_array_from_dword(data_count))
+        write_data.extend(create_byte_array_from_dword(address))
+        write_data.extend(data)
+
+        if data_count == 0:
+            raise NysaCommError("Length of data to write is 0!")
 
         with self.lock:
-
-            write_data = Array('B')
-            if self.mem_addr is None:
-                self.mem_addr = self.nsm.get_address_of_memory_bus()
-
-            command = COMMAND_WRITE
-
-            if address >= self.mem_addr:
-                address = address - self.mem_addr
-                command |= FLAG_MEM_BUS
-
-            if disable_auto_inc:
-                command |= FLAG_DISABLE_AUTO_INC
-
-            write_data.extend(create_byte_array_from_dword(command))
-
-            while (len(data) % 4) != 0:
-                data.append(0)
-
-            data_count = len(data) / 4
-
-            write_data.extend(create_byte_array_from_dword(data_count))
-            write_data.extend(create_byte_array_from_dword(address))
-            write_data.extend(data)
-
-            if data_count == 0:
-                raise NysaCommError("Length of data to write is 0!")
-
+            self.dev.purge_buffers()
             self.dev.write_data(write_data)
 
     def ping (self):
@@ -472,6 +484,41 @@ class _Dionysus (Nysa):
             bbc.soft_reset_high()
             bbc.pins_on()
             bbc.set_pins_to_input()
+
+    def soft_reset(self):
+        """soft_reset
+
+        Inband software reset, this resets all slave/memory cores.
+
+        This does not reset the master or host interface and if a slave core has
+        blocked the master this will not work.
+
+        Command Format
+
+        00 00 00 03
+        00 00 00 00
+        00 00 00 00 
+
+        (Command Numbers can be found in 'cbuilder_defines.v' in
+        nysa-verilog/verilog
+
+        Args:
+          Nothing
+
+        Returns:
+          Nothing
+
+        Raises:
+          AssertionError: This function must be overriden by a board specific
+          implementation
+          NysaCommError: A failure of communication is detected
+        """
+        write_data = Array('B')
+        write_data.extend(create_byte_array_from_dword(0x00000003))
+        write_data.extend(create_byte_array_from_dword(0x00000000))
+        write_data.extend(create_byte_array_from_dword(0x00000000))
+        with self.lock:
+            self.dev.write_data(write_data)
 
     def is_programmed(self):
         """
